@@ -43,6 +43,13 @@ describe("scheda di osservazione", () => {
     expect(observationSchema.safeParse({ ...valid, notes: "25' filtrante per la punta" }).success).toBe(true);
   });
 
+  it("richiede episodi per i voti 1, 4 e 5", () => {
+    const top = observationSchema.parse({ ...valid, tecnica: 5 });
+    expect(submissionIssues(top).some((i) => i.includes("1, 4 e 5"))).toBe(true);
+    const withEpisode = observationSchema.parse({ ...valid, tecnica: 5, notes: "12' controllo orientato e filtrante" });
+    expect(submissionIssues(withEpisode)).toEqual([]);
+  });
+
   it("permette la bozza incompleta ma elenca che cosa manca per l'invio", () => {
     const draft = observationSchema.parse({ athleteId: "a1", date: today, eventType: "ALLENAMENTO", team: "Squadra Demo", category: "U15", minutes: 30 });
     const issues = submissionIssues(draft);

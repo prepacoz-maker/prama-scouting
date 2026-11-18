@@ -77,6 +77,10 @@ export function submissionIssues(input: ObservationInput): string[] {
   const rated = ATTRIBUTES.filter((a) => typeof input[a] === "number").length;
   if (rated < 8) issues.push(`Valutare almeno 8 attributi su 15 (ora: ${rated}). Usare N/V solo per ciò che non si è visto.`);
   if (!input.strengths?.trim()) issues.push("Indicare almeno un punto di forza.");
+  // Standard PRAMA: i voti estremi (1, 4, 5) vanno motivati con almeno un episodio (minuto e fatto).
+  const extremes = ATTRIBUTES.filter((a) => input[a] === 1 || input[a] === 4 || input[a] === 5).length;
+  if (extremes > 0 && (input.notes?.trim().length ?? 0) < 15)
+    issues.push("I voti 1, 4 e 5 vanno motivati: annotare negli episodi almeno un fatto con il minuto.");
   if (!input.improvements?.trim()) issues.push("Indicare almeno un'area di miglioramento.");
   if (!input.interest) issues.push("Indicare il livello di interesse proposto.");
   if (!input.action) issues.push("Indicare l'azione consigliata.");

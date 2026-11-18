@@ -11,7 +11,7 @@ import type { AthleteOption, ObservationFormValues } from "@/lib/observation-for
 import { observationSchema } from "@/lib/validation";
 import { Alert } from "./ui";
 
-const SCALE_HINT = "1 molto sotto la media della categoria · 3 in linea · 5 nettamente distintivo · N/V non valutabile";
+const SCALE_HINT = "1 molto sotto la categoria · 2 sotto la media · 3 in linea · 4 sopra la media · 5 distintivo · N/V non valutabile";
 
 function RatingInput({ name, label, value, onChange }: { name: string; label: string; value: number | null; onChange: (v: number | null) => void }) {
   const options: (number | null)[] = [1, 2, 3, 4, 5, null];
@@ -351,7 +351,7 @@ export function ObservationForm({
           </div>
           <div className="sm:col-span-2">
             <label htmlFor="notes" className="label">
-              Note libere <span className="muted font-normal">(episodi con minuto, informazioni da verificare)</span>
+              Episodi e note <span className="muted font-normal">(minuto – fatto; obbligatori se assegni 1, 4 o 5)</span>
             </label>
             <textarea rows={3} {...field("notes")} className="input" />
             <FieldError name="notes" />
