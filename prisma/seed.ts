@@ -13,6 +13,11 @@ const daysAhead = (n: number) => new Date(Date.now() + n * 86_400_000);
 const ratings = (values: (number | null)[]) => Object.fromEntries(ATTRIBUTES.map((a, i) => [a, values[i]]));
 
 async function main() {
+  // In ambienti ospitati il seed parte solo su database vuoto, per non cancellare dati esistenti.
+  if (process.env.SEED_ONLY_IF_EMPTY === "1" && (await db.user.count()) > 0) {
+    console.log("Seed saltato: il database contiene già utenti.");
+    return;
+  }
   await db.$transaction([
     db.auditLog.deleteMany(), db.athleteBadge.deleteMany(), db.badge.deleteMany(), db.media.deleteMany(), db.consent.deleteMany(),
     db.followUp.deleteMany(), db.observation.deleteMany(), db.athleteIdentity.deleteMany(), db.athlete.deleteMany(), db.scout.deleteMany(),
