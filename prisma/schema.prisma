@@ -1,0 +1,379 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SCOUT
+  REFERENTE
+  ADMIN
+}
+
+enum RoleGroup {
+  PORTIERE
+  DIFENSORE
+  CENTROCAMPISTA
+  ATTACCANTE
+}
+
+enum Foot {
+  DESTRO
+  SINISTRO
+  ENTRAMBI
+  NON_RILEVATO
+}
+
+enum AthleteStatus {
+  DA_VALUTARE
+  IN_OSSERVAZIONE
+  NUOVO_CONTROLLO_RICHIESTO
+  VIDEO_RICHIESTO
+  IN_FOLLOW_UP
+  INTERESSANTE
+  MOLTO_INTERESSANTE
+  NON_PRIORITARIO
+  ARCHIVIATO
+  DUPLICATO
+}
+
+enum Interest {
+  BASSO
+  MEDIO
+  ALTO
+  MOLTO_ALTO
+}
+
+enum Reliability {
+  NESSUNA
+  BASSA
+  MEDIA
+  ALTA
+}
+
+enum EventType {
+  PARTITA
+  ALLENAMENTO
+  TORNEO
+  AMICHEVOLE
+  VIDEO
+}
+
+enum Maturation {
+  PRECOCE
+  IN_LINEA
+  TARDIVA
+  NON_VALUTABILE
+}
+
+enum ReviewStatus {
+  BOZZA
+  DA_VALUTARE
+  INTEGRAZIONE_RICHIESTA
+  APPROVATA
+}
+
+enum RecommendedAction {
+  ARCHIVIAZIONE
+  NUOVO_CONTROLLO
+  RICHIESTA_VIDEO
+  COLLOQUIO
+  FOLLOW_UP
+}
+
+enum FollowUpType {
+  NUOVO_CONTROLLO
+  VIDEO
+  COLLOQUIO
+  MONITORAGGIO
+}
+
+enum FollowUpStatus {
+  APERTO
+  COMPLETATO
+  ANNULLATO
+}
+
+enum MediaKind {
+  VIDEO
+  FOTO
+}
+
+enum ConsentType {
+  FOTO
+  VIDEO
+  DATI
+}
+
+model Zone {
+  id           String        @id @default(cuid())
+  code         String        @unique // es. Z01
+  name         String
+  active       Boolean       @default(true)
+  users        User[]
+  athletes     Athlete[]
+  observations Observation[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role     @default(SCOUT)
+  active       Boolean  @default(true)
+  zoneId       String?
+  zone         Zone?    @relation(fields: [zoneId], references: [id])
+  createdAt    DateTime @default(now())
+
+  scout            Scout?
+  observations     Observation[] @relation("ObservationScout")
+  reviews          Observation[] @relation("ObservationReviewer")
+  createdAthletes  Athlete[]     @relation("AthleteCreator")
+  assignedAthletes Athlete[]     @relation("AthleteAssignedScout")
+  followUps        FollowUp[]    @relation("FollowUpAssignee")
+  createdFollowUps FollowUp[]    @relation("FollowUpCreator")
+  media            Media[]
+  consents         Consent[]
+  auditLogs        AuditLog[]
+}
+
+/// Profilo operativo dello scout (abilitazioni specifiche).
+model Scout {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  canUploadMedia Boolean  @default(false)
+  trainedAt      DateTime? // data di completamento del corso scout
+  ndaSignedAt    DateTime? // impegno di riservatezza firmato
+}
+
+/// Permessi per ruolo. In v0.1 la fonte autorevole è src/lib/permissions.ts;
+/// la tabella è popolata dal seed e mostrata nelle impostazioni.
+model RolePermission {
+  id         String @id @default(cuid())
+  role       Role
+  permission String
+
+  @@unique([role, permission])
+}
+
+/// Dati sportivi e di valutazione, collegati al codice atleta (pseudonimo).
+model Athlete {
+  id             String        @id @default(cuid())
+  code           String        @unique // es. A-Z01-0001
+  zoneId         String
+  zone           Zone          @relation(fields: [zoneId], references: [id])
+  birthYear      Int?
+  roleGroup      RoleGroup
+  primaryRole    String
+  secondaryRoles String[]
+  team           String
+  category       String
+  foot           Foot          @default(NON_RILEVATO)
+  heightCm       Int?
+  weightKg       Int?
+  status         AthleteStatus @default(DA_VALUTARE)
+  interest       Interest?
+
+  // Valori calcolati (aggiornati a ogni approvazione)
+  overall           Int?
+  potentialMin      Int?
+  potentialMax      Int?
+  reliability       Reliability @default(NESSUNA)
+  observationsCount Int         @default(0)
+  lastObservedAt    DateTime?
+  nextCheckAt       DateTime?
+
+  createdById     String
+  createdBy       User      @relation("AthleteCreator", fields: [createdById], references: [id])
+  assignedScoutId String?
+  assignedScout   User?     @relation("AthleteAssignedScout", fields: [assignedScoutId], references: [id])
+  reviewDueAt     DateTime? // revisione di conservazione
+  anonymizedAt    DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  identity     AthleteIdentity?
+  observations Observation[]
+  media        Media[]
+  followUps    FollowUp[]
+  consents     Consent[]
+  badges       AthleteBadge[]
+
+  @@index([zoneId, status])
+  @@index([nextCheckAt])
+}
+
+/// Dati identificativi, separati dalle valutazioni. Letti solo da chi ne ha titolo.
+model AthleteIdentity {
+  id        String  @id @default(cuid())
+  athleteId String  @unique
+  athlete   Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  firstName String
+  lastName  String
+}
+
+model Observation {
+  id         String    @id @default(cuid())
+  athleteId  String
+  athlete    Athlete   @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  scoutId    String
+  scout      User      @relation("ObservationScout", fields: [scoutId], references: [id])
+  zoneId     String
+  zone       Zone      @relation(fields: [zoneId], references: [id])
+  date       DateTime
+  eventType  EventType
+  team       String
+  opponent   String?
+  category   String
+  competition String?
+  venue      String?
+  minutes    Int
+  conditions String?
+  maturation Maturation @default(NON_VALUTABILE)
+
+  // Attributi 1-5; null = non valutabile
+  tecnica            Int?
+  passaggio          Int?
+  controllo          Int?
+  finalizzazione     Int?
+  dribbling          Int?
+  velocita           Int?
+  resistenza         Int?
+  coordinazione      Int?
+  intelligenzaTattica Int?
+  posizionamento     Int?
+  decisionMaking     Int?
+  lavoroDiSquadra    Int?
+  mentalita          Int?
+  disciplina         Int?
+  reazioneErrori     Int?
+
+  strengths       String  @default("")
+  improvements    String  @default("")
+  notes           String  @default("")
+  interest        Interest?
+  action          RecommendedAction?
+  nextCheckSuggested DateTime?
+  conflictOfInterest Boolean @default(false)
+
+  reviewStatus ReviewStatus @default(BOZZA)
+  reviewedById String?
+  reviewedBy   User?        @relation("ObservationReviewer", fields: [reviewedById], references: [id])
+  reviewedAt   DateTime?
+  reviewNote   String?
+  overallSnapshot Int? // overall della singola osservazione, fissato all'approvazione
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  media     Media[]
+
+  @@index([athleteId, date])
+  @@index([zoneId, reviewStatus])
+}
+
+model Media {
+  id            String       @id @default(cuid())
+  athleteId     String
+  athlete       Athlete      @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  observationId String?
+  observation   Observation? @relation(fields: [observationId], references: [id], onDelete: SetNull)
+  uploadedById  String
+  uploadedBy    User         @relation(fields: [uploadedById], references: [id])
+  kind          MediaKind
+  storageKey    String       @unique
+  filename      String
+  mimeType      String
+  sizeBytes     Int
+  tags          String[]
+  markers       Json?        // [{ t: secondi, label: "azione" }]
+  viewed        Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+}
+
+model Consent {
+  id           String      @id @default(cuid())
+  athleteId    String
+  athlete      Athlete     @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  type         ConsentType
+  grantedBy    String      // es. "genitore/tutore" (nessun nome in chiaro qui)
+  grantedAt    DateTime
+  expiresAt    DateTime?
+  revokedAt    DateTime?
+  documentRef  String?     // riferimento al documento firmato, conservato fuori dall'app
+  recordedById String
+  recordedBy   User        @relation(fields: [recordedById], references: [id])
+  createdAt    DateTime    @default(now())
+
+  @@index([athleteId, type])
+}
+
+model FollowUp {
+  id           String         @id @default(cuid())
+  athleteId    String
+  athlete      Athlete        @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  type         FollowUpType
+  status       FollowUpStatus @default(APERTO)
+  dueDate      DateTime
+  note         String         @default("")
+  outcome      String?
+  assignedToId String?
+  assignedTo   User?          @relation("FollowUpAssignee", fields: [assignedToId], references: [id])
+  createdById  String
+  createdBy    User           @relation("FollowUpCreator", fields: [createdById], references: [id])
+  completedAt  DateTime?
+  createdAt    DateTime       @default(now())
+
+  @@index([status, dueDate])
+}
+
+model Badge {
+  id          String         @id @default(cuid())
+  key         String         @unique
+  label       String
+  description String
+  athletes    AthleteBadge[]
+}
+
+model AthleteBadge {
+  athleteId String
+  athlete   Athlete  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  badgeId   String
+  badge     Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  awardedAt DateTime @default(now())
+
+  @@id([athleteId, badgeId])
+}
+
+/// Pesi degli attributi per gruppo di ruolo, configurabili dall'admin.
+model MetricWeight {
+  id        String    @id @default(cuid())
+  roleGroup RoleGroup
+  attribute String
+  weight    Float
+
+  @@unique([roleGroup, attribute])
+}
+
+model Setting {
+  key   String @id
+  value String
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entity, entityId])
+}
