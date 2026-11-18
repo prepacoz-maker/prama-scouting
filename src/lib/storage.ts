@@ -58,3 +58,6 @@ export const ALLOWED_MEDIA: Record<string, "VIDEO" | "FOTO"> = {
 };
 
 export const maxMediaBytes = () => Number(process.env.MEDIA_MAX_MB ?? 200) * 1024 * 1024;
+
+/** Su hosting senza disco persistente (es. Vercel) il caricamento resta disattivato: MEDIA_UPLOADS="off". */
+export const mediaUploadsEnabled = () => process.env.MEDIA_UPLOADS !== "off";

@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { getUser } from "@/lib/auth";
 import { can, canViewAthlete } from "@/lib/permissions";
-import { ALLOWED_MEDIA, maxMediaBytes, storage } from "@/lib/storage";
+import { ALLOWED_MEDIA, maxMediaBytes, mediaUploadsEnabled, storage } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
@@ -13,6 +13,8 @@ const error = (message: string, status: number) => NextResponse.json({ error: me
 export async function POST(request: Request) {
   const user = await getUser();
   if (!user || !can(user, "media.upload")) return error("Accesso non consentito.", 401);
+
+  if (!mediaUploadsEnabled()) return error("Il caricamento di media non è attivo in questo ambiente di prova.", 503);
 
   const form = await request.formData();
   const athleteId = String(form.get("athleteId") ?? "");

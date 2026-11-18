@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { loadAthleteCard } from "@/lib/athlete-view";
 import { can, canManageAthlete } from "@/lib/permissions";
 import { ATTRIBUTE_LABELS } from "@/lib/rating";
+import { mediaUploadsEnabled } from "@/lib/storage";
 import { FOLLOWUP_STATUS_LABELS, FOLLOWUP_TYPE_LABELS, INTEREST_LABELS, STATUS_LABELS, fmtDate } from "@/lib/labels";
 import { AthleteCard } from "@/components/AthleteCard";
 import { ProgressChart } from "@/components/charts";
@@ -51,7 +52,9 @@ export default async function AthletePage({ params }: { params: { id: string } }
   const activeMediaConsent = consents.some((c) => c.type !== "DATI" && !c.revokedAt && (!c.expiresAt || c.expiresAt > now));
   const canUpload = can(user, "media.upload") && !athlete.anonymizedAt;
   const uploadBlockedReason =
-    user.role === "SCOUT" && !scoutProfile?.canUploadMedia
+    !mediaUploadsEnabled()
+      ? "Il caricamento di media non è attivo in questo ambiente di prova."
+      : user.role === "SCOUT" && !scoutProfile?.canUploadMedia
       ? "Il caricamento di media è riservato agli scout abilitati dal referente."
       : !activeMediaConsent
         ? "Per caricare foto o video serve prima un consenso valido dei genitori/tutori, registrato dal referente."
