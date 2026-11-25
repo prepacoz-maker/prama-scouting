@@ -6,18 +6,29 @@ import { useEffect, useRef, useState } from "react";
 import { Controller, useForm, type Resolver } from "react-hook-form";
 import { saveObservation } from "@/app/actions/observations";
 import { ACTION_LABELS, CATEGORIES, EVENT_LABELS, INTEREST_LABELS, MATURATION_LABELS } from "@/lib/labels";
-import { AREAS, ATTRIBUTES, ATTRIBUTE_LABELS } from "@/lib/rating";
+import { ATTRIBUTE_LABELS, areasFor, attributesFor, isGoalkeeper, minRatedFor, type Attribute } from "@/lib/rating";
+import { ATTRIBUTE_GUIDE, MISMATCH_LABELS, MISMATCH_TYPE_LABELS } from "@/lib/standard";
 import type { AthleteOption, ObservationFormValues } from "@/lib/observation-form";
 import { observationSchema } from "@/lib/validation";
 import { Alert } from "./ui";
 
 const SCALE_HINT = "1 molto sotto la categoria · 2 sotto la media · 3 in linea · 4 sopra la media · 5 distintivo · N/V non valutabile";
 
-function RatingInput({ name, label, value, onChange }: { name: string; label: string; value: number | null; onChange: (v: number | null) => void }) {
+function RatingInput({ name, label, value, onChange }: { name: Attribute; label: string; value: number | null; onChange: (v: number | null) => void }) {
   const options: (number | null)[] = [1, 2, 3, 4, 5, null];
+  const guide = ATTRIBUTE_GUIDE[name];
   return (
     <fieldset className="py-2">
       <legend className="mb-1.5 text-sm font-medium">{label}</legend>
+      <details className="mb-1.5 text-xs text-prama-600 dark:text-prama-300">
+        <summary className="cursor-pointer select-none">Cosa osservare</summary>
+        <p className="mt-1">{guide.indicator}</p>
+        <ul className="mt-1 space-y-0.5">
+          <li><strong>1</strong> · {guide.levels[1]}</li>
+          <li><strong>3</strong> · {guide.levels[3]}</li>
+          <li><strong>5</strong> · {guide.levels[5]}</li>
+        </ul>
+      </details>
       <div className="grid grid-cols-6 gap-1.5">
         {options.map((option) => {
           const checked = value === option;
@@ -111,7 +122,10 @@ export function ObservationForm({
   }, [watch, draftKey]);
 
   const values = watch();
-  const ratedCount = ATTRIBUTES.filter((a) => typeof values[a] === "number").length;
+  const roleGroup = athletes.find((a) => a.id === values.athleteId)?.roleGroup ?? "CENTROCAMPISTA";
+  const goalkeeper = isGoalkeeper(roleGroup);
+  const template = attributesFor(roleGroup);
+  const ratedCount = template.filter((a) => typeof values[a] === "number").length;
 
   const discardLocal = () => {
     try {
@@ -307,11 +321,14 @@ export function ObservationForm({
         <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-base font-semibold">2. Valutazioni</h2>
           <p className="text-sm font-medium" aria-live="polite">
-            {ratedCount} di 15 valutati
+            {ratedCount} di {template.length} valutati (minimo {minRatedFor(roleGroup)})
           </p>
         </div>
-        <p className="hint mb-2">{SCALE_HINT}. Valuta solo ciò che hai visto.</p>
-        {AREAS.map((area) => (
+        <p className="hint mb-2">
+          {goalkeeper ? "Scheda portiere (set portiere v1). " : "Standard PRAMA v2.1. "}
+          {SCALE_HINT}. Valuta solo ciò che hai visto; ogni 1, 4 o 5 va motivato con un episodio.
+        </p>
+        {areasFor(roleGroup).map((area) => (
           <div key={area.key} className="border-t border-prama-100 pt-3 first:border-0 dark:border-prama-800">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-prama-500 dark:text-prama-300">{area.label}</h3>
             <div className="grid gap-x-6 sm:grid-cols-2">
@@ -351,11 +368,49 @@ export function ObservationForm({
           </div>
           <div className="sm:col-span-2">
             <label htmlFor="notes" className="label">
-              Episodi e note <span className="muted font-normal">(minuto – fatto; obbligatori se assegni 1, 4 o 5)</span>
+              Episodi e note <span className="muted font-normal">(obbligatori se assegni 1, 4 o 5)</span>
             </label>
-            <textarea rows={3} {...field("notes")} className="input" />
+            <textarea rows={4} {...field("notes")} className="input" placeholder="23' · pressione alta · centrale / intermedio · lato debole · possesso · scansiona, riceve orientato, rompe la linea con una trasmissione verticale" />
+            <p className="hint">Per ogni episodio: minuto, pressione (nessuna, media, alta), zona e corridoio, lato, momento (possesso, non possesso, transizione) e azione con i verbi.</p>
             <FieldError name="notes" />
           </div>
+          {!goalkeeper && (
+            <>
+              <div>
+                <label htmlFor="mismatch" className="label">
+                  Mismatch
+                </label>
+                <select id="mismatch" className="input" value={values.mismatch ?? ""} onChange={(e) => setValue("mismatch", e.target.value || null)}>
+                  <option value="">Seleziona…</option>
+                  {Object.entries(MISMATCH_LABELS).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+                <p className="hint">Vantaggio di velocità, fisico, abilità o posizione rispetto al diretto avversario.</p>
+              </div>
+              <div>
+                <label htmlFor="mismatchType" className="label">
+                  Tipo di mismatch
+                </label>
+                <select
+                  id="mismatchType"
+                  className="input"
+                  disabled={!values.mismatch || values.mismatch === "NON_OSSERVATO"}
+                  value={values.mismatchType ?? ""}
+                  onChange={(e) => setValue("mismatchType", e.target.value || null)}
+                >
+                  <option value="">Seleziona…</option>
+                  {Object.entries(MISMATCH_TYPE_LABELS).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
           <div>
             <label htmlFor="interest" className="label">
               Livello di interesse proposto

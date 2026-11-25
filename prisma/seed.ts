@@ -1,7 +1,7 @@
 // Dati di esempio FITTIZI: nessuna persona, squadra o atleta reale.
 import { PrismaClient, type Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { BADGES, DEFAULT_WEIGHTS, ATTRIBUTES } from "../src/lib/rating";
+import { BADGES, DEFAULT_WEIGHTS, GK_ATTRIBUTES, OUTFIELD_ATTRIBUTES, STANDARD_VERSION } from "../src/lib/rating";
 import { PERMISSIONS } from "../src/lib/permissions";
 import { recomputeAll } from "../src/lib/recompute";
 
@@ -9,14 +9,27 @@ const db = new PrismaClient();
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000);
 const daysAhead = (n: number) => new Date(Date.now() + n * 86_400_000);
 
-// Ordine dei voti: come ATTRIBUTES. null = non valutabile.
-const ratings = (values: (number | null)[]) => Object.fromEntries(ATTRIBUTES.map((a, i) => [a, values[i]]));
+// Ordine dei voti: come OUTFIELD_ATTRIBUTES (standard v2.1, 17 attributi). null = non valutabile.
+const ratings = (values: (number | null)[]) => Object.fromEntries(OUTFIELD_ATTRIBUTES.map((a, i) => [a, values[i] ?? null]));
+// Scheda portiere: ordine come GK_ATTRIBUTES (set portiere v1, 12 attributi).
+const gkRatings = (values: (number | null)[]) => Object.fromEntries(GK_ATTRIBUTES.map((a, i) => [a, values[i] ?? null]));
 
 async function main() {
   // In ambienti ospitati il seed parte solo su database vuoto, per non cancellare dati esistenti.
+  // In ambienti ospitati il seed parte solo se il database è vuoto o contiene dati demo di uno standard precedente.
   if (process.env.SEED_ONLY_IF_EMPTY === "1" && (await db.user.count()) > 0) {
-    console.log("Seed saltato: il database contiene già utenti.");
-    return;
+    const version = await db.setting.findUnique({ where: { key: "standardVersion" } });
+    if (version?.value === STANDARD_VERSION) {
+      console.log(`Seed saltato: dati demo già allineati allo standard ${STANDARD_VERSION}.`);
+      return;
+    }
+    // Protezione: si rigenera solo un database che contiene esclusivamente utenti demo (@prama.test).
+    const nonDemo = await db.user.count({ where: { NOT: { email: { endsWith: "@prama.test" } } } });
+    if (nonDemo > 0) {
+      console.log("Seed saltato: il database contiene utenti non demo. Nessun dato cancellato.");
+      return;
+    }
+    console.log(`Dati demo di uno standard precedente: rigenerazione con lo standard ${STANDARD_VERSION}.`);
   }
   await db.$transaction([
     db.auditLog.deleteMany(), db.athleteBadge.deleteMany(), db.badge.deleteMany(), db.media.deleteMany(), db.consent.deleteMany(),
@@ -38,7 +51,12 @@ async function main() {
   const scout2 = await db.user.create({ data: { email: "scout2@prama.test", name: "Scout Demo Due", role: "SCOUT", zoneId: z1.id, passwordHash, scout: { create: { trainedAt: daysAgo(30), ndaSignedAt: daysAgo(30) } } } });
   const scout3 = await db.user.create({ data: { email: "scout3@prama.test", name: "Scout Demo Tre", role: "SCOUT", zoneId: z6.id, passwordHash, scout: { create: { trainedAt: daysAgo(20), ndaSignedAt: daysAgo(20) } } } });
 
-  await db.setting.create({ data: { key: "retentionMonths", value: "12" } });
+  await db.setting.createMany({
+    data: [
+      { key: "retentionMonths", value: "12" },
+      { key: "standardVersion", value: STANDARD_VERSION },
+    ],
+  });
   await db.badge.createMany({ data: Object.entries(BADGES).map(([key, b]) => ({ key, label: b.label, description: b.description })) });
   await db.metricWeight.createMany({
     data: Object.entries(DEFAULT_WEIGHTS).flatMap(([roleGroup, weights]) =>
@@ -64,20 +82,20 @@ async function main() {
   const approved = { reviewStatus: "APPROVATA" as const, reviewedById: referente.id };
   const observations: (Obs & { zoneId: string })[] = [
     // A1: quattro osservazioni approvate, in crescita
-    { athleteId: a1.id, zoneId: z1.id, scoutId: scout1.id, date: daysAgo(120), eventType: "PARTITA", team: a1.team, opponent: "Demo Scirocco", category: "U15", competition: "Campionato regionale", venue: "Campo comunale (demo)", minutes: 70, maturation: "TARDIVA", ...ratings([3, 3, 4, 3, 4, 3, 3, 4, 3, 3, 3, 3, 3, 4, 3]), strengths: "Primo controllo orientato\nUno contro uno in spazi stretti", improvements: "Continuità senza palla\nDuelli fisici", interest: "MEDIO", action: "NUOVO_CONTROLLO", ...approved, reviewedAt: daysAgo(117) },
-    { athleteId: a1.id, zoneId: z1.id, scoutId: scout2.id, date: daysAgo(85), eventType: "ALLENAMENTO", team: a1.team, category: "U15", venue: "Centro sportivo (demo)", minutes: 60, maturation: "TARDIVA", ...ratings([4, 3, 4, 3, 4, 3, 3, 4, 4, 3, 4, 3, 4, 4, 3]), strengths: "Applica subito le correzioni\nUsa entrambi i piedi", improvements: "Scelta dell'ultimo passaggio", interest: "ALTO", action: "FOLLOW_UP", ...approved, reviewedAt: daysAgo(83) },
-    { athleteId: a1.id, zoneId: z1.id, scoutId: scout1.id, date: daysAgo(40), eventType: "PARTITA", team: a1.team, opponent: "Demo Ponente", category: "U15", competition: "Campionato regionale", minutes: 80, maturation: "TARDIVA", ...ratings([4, 4, 4, 4, 5, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4]), strengths: "Tempi di smarcamento\nDribbling efficace nei 16 metri\nReazione dopo la palla persa", improvements: "Resistenza nel finale", interest: "ALTO", action: "FOLLOW_UP", ...approved, reviewedAt: daysAgo(38) },
-    { athleteId: a1.id, zoneId: z1.id, scoutId: scout1.id, date: daysAgo(9), eventType: "TORNEO", team: a1.team, opponent: "Demo Libeccio", category: "U15", competition: "Torneo giovanile (demo)", minutes: 50, maturation: "IN_LINEA", ...ratings([4, 4, 5, 4, 5, 4, 4, 4, 4, 4, 5, 4, 5, 4, 4]), strengths: "Decisioni rapide sotto pressione\nControllo in velocità", improvements: "Gioco aereo", interest: "ALTO", action: "FOLLOW_UP", nextCheckSuggested: daysAhead(21), ...approved, reviewedAt: daysAgo(7) },
+    { athleteId: a1.id, zoneId: z1.id, scoutId: scout1.id, date: daysAgo(120), eventType: "PARTITA", team: a1.team, opponent: "Demo Scirocco", category: "U15", competition: "Campionato regionale", venue: "Campo comunale (demo)", minutes: 70, maturation: "TARDIVA", ...ratings([3, 3, 4, 3, 4, 3, 3, 4, 3, 3, 3, 3, 3, 4, 3, 3, 2]), strengths: "Primo controllo orientato\nUno contro uno in spazi stretti", improvements: "Continuità senza palla\nDuelli fisici", interest: "MEDIO", action: "NUOVO_CONTROLLO", ...approved, reviewedAt: daysAgo(117) },
+    { athleteId: a1.id, zoneId: z1.id, scoutId: scout2.id, date: daysAgo(85), eventType: "ALLENAMENTO", team: a1.team, category: "U15", venue: "Centro sportivo (demo)", minutes: 60, maturation: "TARDIVA", ...ratings([4, 3, 4, 3, 4, 3, 3, 4, 4, 3, 4, 3, 4, 4, 3, 3, 3]), strengths: "Applica subito le correzioni\nUsa entrambi i piedi", improvements: "Scelta dell'ultimo passaggio", interest: "ALTO", action: "FOLLOW_UP", ...approved, reviewedAt: daysAgo(83) },
+    { athleteId: a1.id, zoneId: z1.id, scoutId: scout1.id, date: daysAgo(40), eventType: "PARTITA", team: a1.team, opponent: "Demo Ponente", category: "U15", competition: "Campionato regionale", minutes: 80, maturation: "TARDIVA", ...ratings([4, 4, 4, 4, 5, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3]), strengths: "Tempi di smarcamento\nDribbling efficace nei 16 metri\nReazione dopo la palla persa", improvements: "Resistenza nel finale", interest: "ALTO", action: "FOLLOW_UP", ...approved, reviewedAt: daysAgo(38) },
+    { athleteId: a1.id, zoneId: z1.id, scoutId: scout1.id, date: daysAgo(9), eventType: "TORNEO", team: a1.team, opponent: "Demo Libeccio", category: "U15", competition: "Torneo giovanile (demo)", minutes: 50, maturation: "IN_LINEA", ...ratings([4, 4, 5, 4, 5, 4, 4, 4, 4, 4, 5, 4, 5, 4, 4, 4, 3]), strengths: "Decisioni rapide sotto pressione\nControllo in velocità", improvements: "Gioco aereo", notes: "23' · pressione alta · offensiva / esterno · lato forte · possesso · scansiona, riceve orientato, punta e supera l'uomo in conduzione.\n41' · pressione media · offensiva / intermedio · transizione positiva · attacca la profondità e conclude sul primo palo.", mismatch: "CREATO", mismatchType: "VELOCITA", interest: "ALTO", action: "FOLLOW_UP", nextCheckSuggested: daysAhead(21), ...approved, reviewedAt: daysAgo(7) },
     // A2: due approvate, una in attesa
-    { athleteId: a2.id, zoneId: z1.id, scoutId: scout2.id, date: daysAgo(60), eventType: "PARTITA", team: a2.team, opponent: "Demo Scirocco", category: "U16", minutes: 75, maturation: "IN_LINEA", ...ratings([4, 4, 4, 2, 3, 3, 4, 3, 4, 4, 4, 5, 4, 5, 3]), strengths: "Ordine nel gioco corto\nComunicazione con i compagni", improvements: "Conclusione da fuori\nCambio di passo", interest: "MEDIO", action: "FOLLOW_UP", ...approved, reviewedAt: daysAgo(57) },
-    { athleteId: a2.id, zoneId: z1.id, scoutId: scout1.id, date: daysAgo(25), eventType: "VIDEO", team: a2.team, opponent: "Demo Ponente", category: "U16", minutes: 45, maturation: "IN_LINEA", ...ratings([4, 5, 4, null, 3, 3, 4, 3, 5, 4, 4, 5, 4, 5, 4]), strengths: "Visione sul lato debole\nDisponibilità al lavoro difensivo", improvements: "Velocità sul breve", interest: "MEDIO", action: "FOLLOW_UP", ...approved, reviewedAt: daysAgo(23) },
-    { athleteId: a2.id, zoneId: z1.id, scoutId: scout2.id, date: daysAgo(3), eventType: "PARTITA", team: a2.team, opponent: "Demo Libeccio", category: "U16", minutes: 80, maturation: "IN_LINEA", ...ratings([4, 5, 4, 3, 3, 3, 4, 4, 5, 4, 5, 5, 4, 5, 4]), strengths: "Gestione dei tempi di gioco\nLeadership nei momenti difficili", improvements: "Finalizzazione", interest: "ALTO", action: "COLLOQUIO", reviewStatus: "DA_VALUTARE" },
+    { athleteId: a2.id, zoneId: z1.id, scoutId: scout2.id, date: daysAgo(60), eventType: "PARTITA", team: a2.team, opponent: "Demo Scirocco", category: "U16", minutes: 75, maturation: "IN_LINEA", ...ratings([4, 4, 4, 2, 3, 3, 4, 3, 4, 4, 4, 5, 4, 5, 3, 4, 4]), strengths: "Ordine nel gioco corto\nComunicazione con i compagni", improvements: "Conclusione da fuori\nCambio di passo", interest: "MEDIO", action: "FOLLOW_UP", ...approved, reviewedAt: daysAgo(57) },
+    { athleteId: a2.id, zoneId: z1.id, scoutId: scout1.id, date: daysAgo(25), eventType: "VIDEO", team: a2.team, opponent: "Demo Ponente", category: "U16", minutes: 45, maturation: "IN_LINEA", ...ratings([4, 5, 4, null, 3, 3, 4, 3, 5, 4, 4, 5, 4, 5, 4, 5, 4]), strengths: "Visione sul lato debole\nDisponibilità al lavoro difensivo", improvements: "Velocità sul breve", interest: "MEDIO", action: "FOLLOW_UP", ...approved, reviewedAt: daysAgo(23) },
+    { athleteId: a2.id, zoneId: z1.id, scoutId: scout2.id, date: daysAgo(3), eventType: "PARTITA", team: a2.team, opponent: "Demo Libeccio", category: "U16", minutes: 80, maturation: "IN_LINEA", ...ratings([4, 5, 4, 3, 3, 3, 4, 4, 5, 4, 5, 5, 4, 5, 4, 5, 4]), strengths: "Gestione dei tempi di gioco\nLeadership nei momenti difficili", improvements: "Finalizzazione", notes: "15' · pressione alta · centrale / centrale · possesso · scansiona due volte, riceve orientato e rompe la linea di centrocampo con una trasmissione verticale.\n58' · transizione negativa · riaggredisce subito e recupera palla.", mismatch: "NON_OSSERVATO", interest: "ALTO", action: "COLLOQUIO", reviewStatus: "DA_VALUTARE" },
     // A3: prima scheda, da valutare
-    { athleteId: a3.id, zoneId: z1.id, scoutId: scout1.id, date: daysAgo(2), eventType: "PARTITA", team: a3.team, opponent: "Demo Maestrale", category: "U14", minutes: 60, maturation: "PRECOCE", ...ratings([3, 3, 3, null, 2, 4, 4, 3, 3, 4, 3, 4, 4, 4, 3]), strengths: "Posizionamento sulla linea\nImpegno costante", improvements: "Uscita palla al piede sotto pressione", notes: "Fisicamente avanti rispetto ai compagni: da rivedere contro avversari di pari sviluppo.", interest: "MEDIO", action: "NUOVO_CONTROLLO", reviewStatus: "DA_VALUTARE" },
+    { athleteId: a3.id, zoneId: z1.id, scoutId: scout1.id, date: daysAgo(2), eventType: "PARTITA", team: a3.team, opponent: "Demo Maestrale", category: "U14", minutes: 60, maturation: "PRECOCE", ...ratings([3, 3, 3, null, 2, 4, 4, 3, 3, 4, 3, 4, 4, 4, 3, 4, 5]), strengths: "Posizionamento sulla linea\nImpegno costante", improvements: "Uscita palla al piede sotto pressione", notes: "Fisicamente avanti rispetto ai compagni: da rivedere contro avversari di pari sviluppo.", interest: "MEDIO", action: "NUOVO_CONTROLLO", reviewStatus: "DA_VALUTARE" },
     // A4: una approvata
-    { athleteId: a4.id, zoneId: z6.id, scoutId: scout3.id, date: daysAgo(30), eventType: "PARTITA", team: a4.team, opponent: "Demo Grecale", category: "U17", minutes: 90, maturation: "IN_LINEA", ...ratings([3, 3, 4, null, null, 3, 3, 4, 4, 4, 4, 4, 4, 4, 3]), strengths: "Letture sulle uscite alte\nGuida della linea difensiva", improvements: "Gioco con i piedi\nReazione dopo l'errore", interest: "MEDIO", action: "NUOVO_CONTROLLO", reviewStatus: "APPROVATA", reviewedById: admin.id, reviewedAt: daysAgo(28) },
+    { athleteId: a4.id, zoneId: z6.id, scoutId: scout3.id, date: daysAgo(30), eventType: "PARTITA", team: a4.team, opponent: "Demo Grecale", category: "U17", minutes: 90, maturation: "IN_LINEA", ...gkRatings([4, 3, 4, 4, 3, 3, 2, 3, 4, 4, 4, 2]), notes: "12' · pressione alta · centrale · possesso avversario · legge il cross dal lato debole, esce alto e blocca nel traffico.\n67' · pressione alta · costruzione dal basso · riceve senza orientarsi e calcia lungo: palla persa.", strengths: "Letture sulle uscite alte\nGuida della linea difensiva", improvements: "Gioco con i piedi\nReazione dopo l'errore", interest: "MEDIO", action: "NUOVO_CONTROLLO", reviewStatus: "APPROVATA", reviewedById: admin.id, reviewedAt: daysAgo(28) },
     // A5: una approvata (osservazione dell'admin in una zona senza scout)
-    { athleteId: a5.id, zoneId: z8.id, scoutId: admin.id, date: daysAgo(15), eventType: "AMICHEVOLE", team: a5.team, opponent: "Demo Tramontana", category: "U15", minutes: 55, maturation: "NON_VALUTABILE", ...ratings([4, 4, 4, 3, 4, 3, 3, 4, 4, 3, 4, 3, 3, 3, 3]), strengths: "Rifinitura tra le linee\nControllo orientato", improvements: "Partecipazione alla fase difensiva", interest: "MEDIO", action: "NUOVO_CONTROLLO", reviewStatus: "APPROVATA", reviewedById: admin.id, reviewedAt: daysAgo(14) },
+    { athleteId: a5.id, zoneId: z8.id, scoutId: admin.id, date: daysAgo(15), eventType: "AMICHEVOLE", team: a5.team, opponent: "Demo Tramontana", category: "U15", minutes: 55, maturation: "NON_VALUTABILE", ...ratings([4, 4, 4, 3, 4, 3, 3, 4, 4, 3, 4, 3, 3, 3, 3, 2, 2]), strengths: "Rifinitura tra le linee\nControllo orientato", improvements: "Partecipazione alla fase difensiva", interest: "MEDIO", action: "NUOVO_CONTROLLO", reviewStatus: "APPROVATA", reviewedById: admin.id, reviewedAt: daysAgo(14) },
   ];
   for (const o of observations) await db.observation.create({ data: o });
 

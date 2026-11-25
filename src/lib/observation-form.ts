@@ -1,5 +1,5 @@
 // Tipi e valori iniziali della scheda: condivisi tra pagine server e modulo client.
-import { ATTRIBUTES, type Attribute } from "./rating";
+import { ATTRIBUTES, type Attribute, type RoleGroup } from "./rating";
 
 type RatingValues = Record<Attribute, number | null>;
 export type ObservationFormValues = RatingValues & {
@@ -21,6 +21,8 @@ export type ObservationFormValues = RatingValues & {
   action: string | null;
   nextCheckSuggested: string;
   conflictOfInterest: boolean;
+  mismatch: string | null;
+  mismatchType: string | null;
 };
 
 export interface AthleteOption {
@@ -28,6 +30,7 @@ export interface AthleteOption {
   label: string;
   team: string;
   category: string;
+  roleGroup: RoleGroup;
 }
 
 const emptyRatings = Object.fromEntries(ATTRIBUTES.map((a) => [a, null])) as RatingValues;
@@ -52,4 +55,6 @@ export const emptyObservation = (athlete?: AthleteOption): ObservationFormValues
   action: null,
   nextCheckSuggested: "",
   conflictOfInterest: false,
+  mismatch: null,
+  mismatchType: null,
 });

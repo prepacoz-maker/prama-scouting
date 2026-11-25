@@ -1,7 +1,8 @@
 // Sistema di valutazione PRAMA: funzioni pure, senza accesso al database.
 // Ogni numero mostrato all'utente deriva da qui, in modo trasparente e testabile.
 
-export const ATTRIBUTES = [
+/** Attributi dei giocatori di movimento (standard v2.1, 17). */
+export const OUTFIELD_ATTRIBUTES = [
   "tecnica",
   "passaggio",
   "controllo",
@@ -17,7 +18,35 @@ export const ATTRIBUTES = [
   "mentalita",
   "disciplina",
   "reazioneErrori",
+  "pressioneRiaggressione",
+  "unoControUnoDifensivo",
 ] as const;
+
+/** Attributi del portiere (set portiere v1, approvato il 25/11/2026). */
+export const GK_ATTRIBUTES = [
+  "gkPiazzamento",
+  "gkPresaRespinta",
+  "gkReattivita",
+  "gkUsciteAlte",
+  "gkUnoControUno",
+  "gkProfondita",
+  "gkGiocoPiedi",
+  "gkDistribuzione",
+  "gkLettura",
+  "gkComunicazione",
+  "gkCompetere",
+  "gkReazioneErrore",
+] as const;
+
+/** Tutte le colonne di voto della scheda (movimento + portiere). */
+export const ATTRIBUTES = [...OUTFIELD_ATTRIBUTES, ...GK_ATTRIBUTES] as const;
+export const STANDARD_VERSION = "v2.1";
+// Standard di valutazione PRAMA v2.1 (approvato il 23/11/2026).
+// Le chiavi storiche restano per non migrare i dati; l'etichetta mostrata segue lo standard:
+// controllo → Controllo orientato · passaggio → Trasmissione · tecnica → Conduzione · dribbling → 1 contro 1 offensivo
+// finalizzazione → Attacco della porta · intelligenzaTattica → Scansione · posizionamento → Smarcamento e spazi
+// velocita → Accelerazione · resistenza → Ripetizione degli sforzi · coordinazione → Agilità · mentalita → Competere
+// lavoroDiSquadra → Collaborazione · reazioneErrori → Reazione all'errore. Nuove: pressioneRiaggressione, unoControUnoDifensivo.
 
 export type Attribute = (typeof ATTRIBUTES)[number];
 export type Ratings = Partial<Record<Attribute, number | null | undefined>>;
@@ -26,49 +55,87 @@ export type Reliability = "NESSUNA" | "BASSA" | "MEDIA" | "ALTA";
 export type Weights = Record<Attribute, number>;
 
 export const ATTRIBUTE_LABELS: Record<Attribute, string> = {
-  tecnica: "Tecnica",
-  passaggio: "Passaggio",
-  controllo: "Controllo",
-  finalizzazione: "Finalizzazione",
-  dribbling: "Dribbling",
-  velocita: "Velocità",
-  resistenza: "Resistenza",
-  coordinazione: "Coordinazione",
-  intelligenzaTattica: "Intelligenza tattica",
-  posizionamento: "Posizionamento",
+  tecnica: "Conduzione",
+  passaggio: "Trasmissione",
+  controllo: "Controllo orientato",
+  finalizzazione: "Attacco della porta",
+  dribbling: "1 contro 1 offensivo",
+  velocita: "Accelerazione",
+  resistenza: "Ripetizione degli sforzi",
+  coordinazione: "Agilità",
+  intelligenzaTattica: "Scansione",
+  posizionamento: "Smarcamento e spazi",
   decisionMaking: "Decision-making",
-  lavoroDiSquadra: "Lavoro di squadra",
-  mentalita: "Mentalità",
+  lavoroDiSquadra: "Collaborazione",
+  mentalita: "Competere",
   disciplina: "Disciplina",
-  reazioneErrori: "Reazione agli errori",
+  reazioneErrori: "Reazione all'errore",
+  pressioneRiaggressione: "Pressione e riaggressione",
+  unoControUnoDifensivo: "1 contro 1 difensivo",
+  gkPiazzamento: "Piazzamento",
+  gkPresaRespinta: "Presa e respinta",
+  gkReattivita: "Reattività e tuffo",
+  gkUsciteAlte: "Uscite alte",
+  gkUnoControUno: "1 contro 1 del portiere",
+  gkProfondita: "Difesa della profondità",
+  gkGiocoPiedi: "Gioco con i piedi",
+  gkDistribuzione: "Distribuzione",
+  gkLettura: "Lettura e decisione",
+  gkComunicazione: "Comunicazione e guida della difesa",
+  gkCompetere: "Competere",
+  gkReazioneErrore: "Reazione all'errore",
 };
 
-/** Le 6 aree del radar e gli attributi che le compongono. */
-export const AREAS: { key: string; label: string; attributes: Attribute[] }[] = [
-  { key: "tecnica", label: "Tecnica", attributes: ["tecnica", "passaggio", "controllo"] },
-  { key: "attacco", label: "Attacco", attributes: ["finalizzazione", "dribbling"] },
+/** Le 5 aree dello standard v2.1 (momenti del gioco) e gli attributi che le compongono. */
+export type Area = { key: string; label: string; attributes: Attribute[] };
+export const AREAS: Area[] = [
+  { key: "possesso", label: "Possesso", attributes: ["controllo", "passaggio", "tecnica", "dribbling", "finalizzazione"] },
+  { key: "lettura", label: "Lettura", attributes: ["intelligenzaTattica", "posizionamento", "decisionMaking"] },
+  { key: "nonPossesso", label: "Non possesso e transizioni", attributes: ["pressioneRiaggressione", "unoControUnoDifensivo"] },
   { key: "atletica", label: "Atletica", attributes: ["velocita", "resistenza", "coordinazione"] },
-  { key: "tattica", label: "Tattica", attributes: ["intelligenzaTattica", "posizionamento", "decisionMaking"] },
-  { key: "squadra", label: "Squadra", attributes: ["lavoroDiSquadra", "disciplina"] },
-  { key: "mentalita", label: "Mentalità", attributes: ["mentalita", "reazioneErrori"] },
+  { key: "mentalitaComportamento", label: "Mentalità e comportamento", attributes: ["mentalita", "reazioneErrori", "lavoroDiSquadra", "disciplina"] },
 ];
 
+/** Le 4 aree del portiere. */
+export const GK_AREAS: Area[] = [
+  { key: "difesaPorta", label: "Difesa della porta", attributes: ["gkPiazzamento", "gkPresaRespinta", "gkReattivita"] },
+  { key: "difesaSpazio", label: "Difesa dello spazio", attributes: ["gkUsciteAlte", "gkUnoControUno", "gkProfondita"] },
+  { key: "gioco", label: "Gioco", attributes: ["gkGiocoPiedi", "gkDistribuzione", "gkLettura"] },
+  { key: "mentalitaGuida", label: "Mentalità e guida", attributes: ["gkComunicazione", "gkCompetere", "gkReazioneErrore"] },
+];
+
+export const isGoalkeeper = (roleGroup: RoleGroup | string) => roleGroup === "PORTIERE";
+/** Attributi, aree e minimo di voti della scheda usata per un reparto. */
+export const attributesFor = (roleGroup: RoleGroup | string): readonly Attribute[] =>
+  isGoalkeeper(roleGroup) ? GK_ATTRIBUTES : OUTFIELD_ATTRIBUTES;
+export const areasFor = (roleGroup: RoleGroup | string): Area[] => (isGoalkeeper(roleGroup) ? GK_AREAS : AREAS);
+
+const zeros = (list: readonly Attribute[]) => Object.fromEntries(list.map((a) => [a, 0]));
+/** Pesi dei giocatori di movimento (portiere a 0). */
 const w = (values: number[]): Weights =>
-  Object.fromEntries(ATTRIBUTES.map((a, i) => [a, values[i]])) as Weights;
+  ({ ...zeros(GK_ATTRIBUTES), ...Object.fromEntries(OUTFIELD_ATTRIBUTES.map((a, i) => [a, values[i]])) }) as Weights;
+/** Pesi del portiere (movimento a 0). */
+const wGk = (values: number[]): Weights =>
+  ({ ...zeros(OUTFIELD_ATTRIBUTES), ...Object.fromEntries(GK_ATTRIBUTES.map((a, i) => [a, values[i]])) }) as Weights;
 
 /** Pesi predefiniti (modificabili dall'admin). Ordine: come ATTRIBUTES. */
 export const DEFAULT_WEIGHTS: Record<RoleGroup, Weights> = {
-  //                    tec pas con fin dri vel res coo int pos dec squ men dis rea
-  PORTIERE: w([1.0, 1.0, 1.0, 0.2, 0.2, 0.8, 0.6, 1.4, 1.2, 1.5, 1.4, 1.0, 1.3, 1.0, 1.4]),
-  DIFENSORE: w([1.0, 1.1, 1.0, 0.4, 0.5, 1.0, 1.0, 1.0, 1.3, 1.5, 1.3, 1.1, 1.1, 1.1, 1.1]),
-  CENTROCAMPISTA: w([1.2, 1.4, 1.3, 0.7, 0.9, 0.8, 1.1, 1.0, 1.4, 1.2, 1.5, 1.1, 1.0, 0.9, 1.0]),
-  ATTACCANTE: w([1.2, 0.9, 1.2, 1.5, 1.3, 1.2, 0.9, 1.0, 1.1, 1.1, 1.3, 0.9, 1.0, 0.8, 1.0]),
+  // Set portiere v1: piaz pres reat usc 1c1 prof piedi distr lett com comp reaz
+  PORTIERE: wGk([1.4, 1.3, 1.3, 1.2, 1.2, 1.0, 1.0, 0.9, 1.3, 1.0, 1.0, 1.2]),
+  // Standard v2.1 movimento:
+  //                    tec pas con fin dri vel res coo int pos dec squ men dis rea pre 1d
+  DIFENSORE: w([0.8, 1.2, 1.1, 0.3, 0.4, 1.1, 1.0, 1.0, 1.3, 1.1, 1.2, 0.9, 1.1, 0.9, 1.0, 1.2, 1.6]),
+  CENTROCAMPISTA: w([1.1, 1.5, 1.4, 0.6, 0.8, 0.8, 1.2, 1.0, 1.5, 1.2, 1.5, 1.0, 1.0, 0.8, 1.0, 1.2, 1.0]),
+  ATTACCANTE: w([1.2, 0.9, 1.2, 1.6, 1.4, 1.3, 0.9, 1.0, 1.0, 1.4, 1.2, 0.8, 1.0, 0.7, 1.0, 1.0, 0.5]),
 };
 
 export const OVERALL_MIN = 40;
 export const OVERALL_MAX = 99;
 /** Numero minimo di attributi valutati per calcolare un overall. */
-export const MIN_RATED_ATTRIBUTES = 8;
+export const MIN_RATED_ATTRIBUTES = 9;
+/** Minimo di attributi per il portiere (set portiere v1). */
+export const MIN_RATED_GK = 6;
+export const minRatedFor = (roleGroup: RoleGroup | string) => (isGoalkeeper(roleGroup) ? MIN_RATED_GK : MIN_RATED_ATTRIBUTES);
 /** Quante osservazioni approvate (le più recenti) entrano nella media. */
 export const OBSERVATIONS_WINDOW = 5;
 
@@ -95,7 +162,7 @@ export function toScale(mean: number): number {
  * Gli attributi non valutati sono esclusi e i pesi rinormalizzati.
  * Restituisce null se gli attributi valutati sono meno di MIN_RATED_ATTRIBUTES.
  */
-export function computeOverall(ratings: Ratings, weights: Weights): number | null {
+export function computeOverall(ratings: Ratings, weights: Weights, minRated = MIN_RATED_ATTRIBUTES): number | null {
   let sum = 0;
   let weightSum = 0;
   let rated = 0;
@@ -108,16 +175,20 @@ export function computeOverall(ratings: Ratings, weights: Weights): number | nul
     sum += v * weight;
     weightSum += weight;
   }
-  if (rated < MIN_RATED_ATTRIBUTES || weightSum === 0) return null;
+  if (rated < minRated || weightSum === 0) return null;
   return toScale(sum / weightSum);
 }
 
-export function areaScores(ratings: Ratings): { key: string; label: string; value: number | null }[] {
-  return AREAS.map((area) => {
+export function areaScores(
+  ratings: Ratings,
+  areas: Area[] = AREAS,
+): { key: string; label: string; attributes: readonly Attribute[]; value: number | null }[] {
+  return areas.map((area) => {
     const values = area.attributes.map((a) => ratings[a]).filter(isRated);
     return {
       key: area.key,
       label: area.label,
+      attributes: area.attributes,
       value: values.length ? Math.round((values.reduce((s, v) => s + v, 0) / values.length) * 10) / 10 : null,
     };
   });
@@ -151,6 +222,10 @@ const LEARNING_ATTRIBUTES: Attribute[] = [
   "mentalita",
   "reazioneErrori",
   "coordinazione",
+  "gkLettura",
+  "gkReattivita",
+  "gkCompetere",
+  "gkReazioneErrore",
 ];
 
 /**
@@ -187,15 +262,16 @@ export function computePotential(input: {
   return { min, max: Math.max(min, max) };
 }
 
-export type BadgeKey = "VISIONE" | "ESPLOSIVITA" | "AFFIDABILITA" | "LEADERSHIP" | "MIGLIORAMENTO" | "TECNICA_PULITA";
+export type BadgeKey = "VISIONE" | "ESPLOSIVITA" | "AFFIDABILITA" | "INTENSITA" | "LEADERSHIP" | "MIGLIORAMENTO" | "TECNICA_PULITA";
 
 export const BADGES: Record<BadgeKey, { label: string; description: string }> = {
-  VISIONE: { label: "Visione di gioco", description: "Intelligenza tattica e decision-making sopra la media in modo costante." },
-  ESPLOSIVITA: { label: "Esplosività", description: "Velocità e accelerazione distintive per la categoria." },
-  AFFIDABILITA: { label: "Affidabilità", description: "Disciplina e lavoro di squadra costanti." },
-  LEADERSHIP: { label: "Leadership", description: "Mentalità e influenza positiva sui compagni." },
+  VISIONE: { label: "Lettura del gioco", description: "Scansione e decision-making sopra la media in modo costante." },
+  ESPLOSIVITA: { label: "Accelerazione", description: "Accelerazione e cambio di ritmo distintivi per la categoria." },
+  AFFIDABILITA: { label: "Affidabilità", description: "Disciplina e collaborazione costanti." },
+  INTENSITA: { label: "Intensità senza palla", description: "Pressione, riaggressione e 1 contro 1 difensivo sopra la media." },
+  LEADERSHIP: { label: "Leadership", description: "Competitività e influenza positiva sui compagni." },
   MIGLIORAMENTO: { label: "Miglioramento rapido", description: "Crescita misurata tra la prima e l'ultima osservazione." },
-  TECNICA_PULITA: { label: "Tecnica pulita", description: "Tecnica, controllo e passaggio sopra la media." },
+  TECNICA_PULITA: { label: "Qualità in possesso", description: "Controllo orientato, trasmissione e conduzione sopra la media." },
 };
 
 const mean = (values: (number | null)[]) => {
@@ -218,6 +294,7 @@ export function computeBadges(input: {
   if (atLeast(mean([a.intelligenzaTattica, a.decisionMaking]), 4.25)) out.push("VISIONE");
   if (atLeast(a.velocita, 4.5)) out.push("ESPLOSIVITA");
   if (atLeast(mean([a.disciplina, a.lavoroDiSquadra]), 4.25)) out.push("AFFIDABILITA");
+  if (atLeast(mean([a.pressioneRiaggressione, a.unoControUnoDifensivo]), 4.25)) out.push("INTENSITA");
   if (atLeast(a.mentalita, 4.5) && atLeast(a.lavoroDiSquadra, 4)) out.push("LEADERSHIP");
   if (atLeast(mean([a.tecnica, a.controllo, a.passaggio]), 4.25)) out.push("TECNICA_PULITA");
   if (approvedCount >= 3 && firstOverall !== null && lastOverall !== null && lastOverall - firstOverall >= 5) {
