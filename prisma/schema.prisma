@@ -130,15 +130,16 @@ model User {
   createdAt    DateTime @default(now())
 
   scout            Scout?
-  observations     Observation[] @relation("ObservationScout")
-  reviews          Observation[] @relation("ObservationReviewer")
-  createdAthletes  Athlete[]     @relation("AthleteCreator")
-  assignedAthletes Athlete[]     @relation("AthleteAssignedScout")
-  followUps        FollowUp[]    @relation("FollowUpAssignee")
-  createdFollowUps FollowUp[]    @relation("FollowUpCreator")
+  observations     Observation[]  @relation("ObservationScout")
+  reviews          Observation[]  @relation("ObservationReviewer")
+  createdAthletes  Athlete[]      @relation("AthleteCreator")
+  assignedAthletes Athlete[]      @relation("AthleteAssignedScout")
+  followUps        FollowUp[]     @relation("FollowUpAssignee")
+  createdFollowUps FollowUp[]     @relation("FollowUpCreator")
   media            Media[]
   consents         Consent[]
   auditLogs        AuditLog[]
+  matchSessions    MatchSession[]
 }
 
 /// Profilo operativo dello scout (abilitazioni specifiche).
@@ -197,12 +198,13 @@ model Athlete {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  identity     AthleteIdentity?
-  observations Observation[]
-  media        Media[]
-  followUps    FollowUp[]
-  consents     Consent[]
-  badges       AthleteBadge[]
+  identity      AthleteIdentity?
+  observations  Observation[]
+  media         Media[]
+  followUps     FollowUp[]
+  consents      Consent[]
+  badges        AthleteBadge[]
+  matchSessions MatchSession[]
 
   @@index([zoneId, status])
   @@index([nextCheckAt])
@@ -409,4 +411,129 @@ enum MismatchType {
   STRUTTURA_FISICA
   ABILITA_RUOLO
   POSIZIONE
+}
+
+// ─── Match analysis (v1, solo admin PRAMA) ───────────────────────────────────
+// Il video NON viene caricato: resta sul computer dell'analista (file locale) o su un link
+// esterno. Nel database si salvano solo tag, tempi, disegni e note.
+
+enum MatchSport {
+  CALCIO
+  BASKET
+}
+
+enum VideoSource {
+  FILE_LOCALE
+  LINK
+}
+
+enum MatchSessionStatus {
+  IN_CORSO
+  COMPLETATA
+}
+
+enum SequenceRating {
+  ECCELLENTE
+  BUONO
+  DA_MIGLIORARE
+  CRITICO
+}
+
+enum Confidence {
+  ALTA
+  MEDIA
+  BASSA
+}
+
+enum EventOutcome {
+  POSITIVO
+  NEGATIVO
+  NEUTRO
+}
+
+model MatchSession {
+  id          String             @id @default(cuid())
+  title       String
+  sport       MatchSport         @default(CALCIO)
+  status      MatchSessionStatus @default(IN_CORSO)
+  date        DateTime
+  competition String             @default("")
+  team        String // squadra dell'atleta analizzato
+  opponent    String             @default("")
+  score       String             @default("")
+  athleteId   String?
+  athlete     Athlete?           @relation(fields: [athleteId], references: [id], onDelete: SetNull)
+  roleTask    String             @default("") // ruolo, posizione e compito tattico
+  objective   String             @default("")
+  level       String             @default("")
+  minutes     Int?
+
+  videoSource   VideoSource
+  videoLabel    String // nome del file locale o descrizione del link
+  videoUrl      String? // solo per i link
+  videoAngle    String      @default("") // angolo di ripresa e qualità
+  durationSec   Float?
+  secondHalfSec Float? // inizio del secondo tempo nel video
+
+  buttons Json // pannello di codifica (copia del modello scelto, personalizzabile)
+
+  rightsConfirmedAt DateTime // dichiarazione: diritti sul video e consensi verificati
+  consentId         String? // consenso VIDEO dell'atleta, se collegato
+
+  // Sezioni del report (template PRAMA v1)
+  summary            String @default("")
+  strengths          String @default("")
+  improvements       String @default("")
+  mainRecommendation String @default("")
+  patterns           String @default("")
+  plan               String @default("")
+  questions          String @default("")
+  limits             String @default("")
+  athleteFeedback    String @default("")
+
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  events    MatchEvent[]
+  playlists MatchPlaylist[]
+
+  @@index([athleteId])
+  @@index([date])
+}
+
+model MatchEvent {
+  id             String          @id @default(cuid())
+  sessionId      String
+  session        MatchSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  code           String // chiave del pulsante (es. PASS_OK)
+  label          String
+  category       String
+  outcome        EventOutcome?
+  timeSec        Float // istante della pressione del pulsante
+  startSec       Float
+  endSec         Float
+  rating         SequenceRating?
+  confidence     Confidence?
+  phase          String          @default("") // fase di gioco
+  fact           String          @default("") // [FATTO]
+  inference      String          @default("") // [INFERENZA]
+  recommendation String          @default("") // [RACCOMANDAZIONE]
+  debrief        Boolean         @default(false) // clip per il debrief con l'atleta
+  drawing        Json? // forme vettoriali in coordinate 0-1
+  drawingSec     Float?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([sessionId, startSec])
+}
+
+model MatchPlaylist {
+  id        String       @id @default(cuid())
+  sessionId String
+  session   MatchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  name      String
+  eventIds  String[]
+  createdAt DateTime     @default(now())
 }

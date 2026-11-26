@@ -16,6 +16,7 @@ const ICONS: Record<string, string> = {
   users: "M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0zM4 21a8 8 0 0 1 16 0z",
   plus: "M12 4v16M4 12h16",
   clock: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2",
+  play: "M4 5h16v14H4zM10 9v6l5-3z",
   cog: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 12h2m12 0h2M12 4v2m0 12v2M6.3 6.3l1.4 1.4m8.6 8.6 1.4 1.4m0-11.4-1.4 1.4m-8.6 8.6-1.4 1.4",
 };
 
@@ -52,7 +53,12 @@ export function Shell({ user, isAdmin, children }: { user: { name: string; roleL
     { href: "/atleti", label: "Atleti", icon: "users" },
     { href: "/osservazioni/nuova", label: "Nuova scheda", icon: "plus" },
     { href: "/follow-up", label: "Follow-up", icon: "clock" },
-    ...(isAdmin ? [{ href: "/impostazioni", label: "Impostazioni", icon: "cog" }] : []),
+    ...(isAdmin
+      ? [
+          { href: "/match-analysis", label: "Match analysis", icon: "play" },
+          { href: "/impostazioni", label: "Impostazioni", icon: "cog" },
+        ]
+      : []),
   ];
   const active = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 

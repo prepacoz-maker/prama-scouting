@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { BADGES, DEFAULT_WEIGHTS, GK_ATTRIBUTES, OUTFIELD_ATTRIBUTES, STANDARD_VERSION } from "../src/lib/rating";
 import { PERMISSIONS } from "../src/lib/permissions";
 import { recomputeAll } from "../src/lib/recompute";
+import { TEMPLATES, clipBounds } from "../src/lib/match";
 
 const db = new PrismaClient();
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000);
@@ -19,12 +20,14 @@ async function main() {
   // In ambienti ospitati il seed parte solo se il database è vuoto o contiene dati demo di uno standard precedente.
   if (process.env.SEED_ONLY_IF_EMPTY === "1" && (await db.user.count()) > 0) {
     const version = await db.setting.findUnique({ where: { key: "standardVersion" } });
-    if (version?.value === STANDARD_VERSION) {
-      console.log(`Seed saltato: dati demo già allineati allo standard ${STANDARD_VERSION}.`);
-      return;
-    }
     // Protezione: si rigenera solo un database che contiene esclusivamente utenti demo (@prama.test).
     const nonDemo = await db.user.count({ where: { NOT: { email: { endsWith: "@prama.test" } } } });
+    if (version?.value === STANDARD_VERSION) {
+      console.log(`Seed saltato: dati demo già allineati allo standard ${STANDARD_VERSION}.`);
+      // Aggiunge l'analisi video dimostrativa ai database demo che non l'hanno ancora.
+      if (nonDemo === 0) await seedMatchDemo();
+      return;
+    }
     if (nonDemo > 0) {
       console.log("Seed saltato: il database contiene utenti non demo. Nessun dato cancellato.");
       return;
@@ -32,6 +35,7 @@ async function main() {
     console.log(`Dati demo di uno standard precedente: rigenerazione con lo standard ${STANDARD_VERSION}.`);
   }
   await db.$transaction([
+    db.matchSession.deleteMany(),
     db.auditLog.deleteMany(), db.athleteBadge.deleteMany(), db.badge.deleteMany(), db.media.deleteMany(), db.consent.deleteMany(),
     db.followUp.deleteMany(), db.observation.deleteMany(), db.athleteIdentity.deleteMany(), db.athlete.deleteMany(), db.scout.deleteMany(),
     db.user.deleteMany(), db.zone.deleteMany(), db.metricWeight.deleteMany(), db.rolePermission.deleteMany(), db.setting.deleteMany(),
@@ -107,7 +111,72 @@ async function main() {
   await db.consent.create({ data: { athleteId: a1.id, type: "VIDEO", grantedBy: "Genitore/tutore", grantedAt: daysAgo(35), documentRef: "DEMO-2026-001", recordedById: referente.id } });
 
   await recomputeAll();
+  await seedMatchDemo();
   console.log("Seed completato: 3 zone, 5 utenti, 5 atleti fittizi, 10 osservazioni, 2 follow-up.");
+}
+
+/** Analisi video dimostrativa (dati FITTIZI): solo se non esiste ancora nessuna analisi. */
+async function seedMatchDemo() {
+  if ((await db.matchSession.count()) > 0) return;
+  const admin = await db.user.findUnique({ where: { email: "admin@prama.test" } });
+  const consent = await db.consent.findFirst({ where: { type: "VIDEO", revokedAt: null }, include: { athlete: true } });
+  if (!admin || !consent) return;
+  const tpl = TEMPLATES.calcio_movimento;
+  const session = await db.matchSession.create({
+    data: {
+      title: `Analisi demo · ${consent.athlete.team} vs Demo Ponente`,
+      date: daysAgo(10),
+      competition: consent.athlete.category,
+      team: consent.athlete.team,
+      opponent: "Demo Ponente",
+      score: "2-1",
+      athleteId: consent.athleteId,
+      roleTask: `${consent.athlete.primaryRole} · compito dimostrativo`,
+      objective: "Dimostrazione: decision-making in possesso e riaggressione",
+      level: "Settore giovanile",
+      minutes: 80,
+      videoSource: "FILE_LOCALE",
+      videoLabel: "partita-demo.mp4",
+      videoAngle: "Esempio: tattica larga dalla tribuna",
+      durationSec: 3000,
+      secondHalfSec: 1500,
+      buttons: tpl.buttons as unknown as Prisma.InputJsonValue,
+      rightsConfirmedAt: daysAgo(10),
+      consentId: consent.id,
+      summary: "Analisi DIMOSTRATIVA con dati fittizi: serve a mostrare il flusso di lavoro, non descrive una partita reale.",
+      strengths: "Riaggressione immediata dopo la palla persa\nControllo orientato sotto pressione",
+      improvements: "Scelta del passaggio negli ultimi 30 metri\nPosizionamento in transizione negativa",
+      mainRecommendation: "Esempio: lavoro di scanning prima della ricezione, 2 sedute a settimana.",
+      limits: "Dati fittizi a scopo dimostrativo.",
+      createdById: admin.id,
+    },
+  });
+  const sample: [string, number, Partial<Prisma.MatchEventUncheckedCreateInput>?][] = [
+    ["PASS_OK", 95],
+    ["CONTROL", 210, { rating: "BUONO", confidence: "ALTA", phase: "Costruzione", fact: "Riceve spalle alla porta, controllo orientato verso l'esterno.", inference: "Ha guardato prima della ricezione: sceglie il lato libero.", debrief: true }],
+    ["PASS_KO", 340, { rating: "DA_MIGLIORARE", confidence: "MEDIA", phase: "Possesso consolidato", fact: "Passaggio verticale intercettato.", recommendation: "Esempio: rondo 4 contro 2 con vincolo di scanning prima del tocco.", debrief: true }],
+    ["PRESS", 352, { rating: "ECCELLENTE", confidence: "ALTA", phase: "Transizione negativa", fact: "Dopo la palla persa riaggredisce entro 2 secondi e recupera.", debrief: true }],
+    ["RECOVER", 355],
+    ["PASS_OK", 520],
+    ["DRIB_OK", 790],
+    ["PASS_KEY", 1105, { rating: "BUONO", confidence: "MEDIA", phase: "Possesso consolidato", fact: "Filtrante tra centrale e terzino." }],
+    ["SHOT_OFF", 1290],
+    ["DUEL_KO", 1620],
+    ["POS_ERR", 1810, { rating: "CRITICO", confidence: "BASSA", phase: "Transizione negativa", fact: "Resta alto, la squadra subisce la transizione.", inference: "Inquadratura stretta: posizione dei compagni non visibile.", debrief: true }],
+    ["PASS_OK", 2050],
+    ["DUEL_OK", 2290],
+    ["SHOT_ON", 2600, { rating: "BUONO", confidence: "ALTA", phase: "Possesso consolidato", fact: "Tiro di prima intenzione sul primo palo, parato." }],
+  ];
+  const created: string[] = [];
+  for (const [code, t, extra] of sample) {
+    const btn = tpl.buttons.find((b) => b.code === code)!;
+    const e = await db.matchEvent.create({
+      data: { sessionId: session.id, code, label: btn.label, category: btn.category, outcome: btn.outcome, timeSec: t, ...clipBounds(t, btn.pre, btn.post, 3000), ...extra },
+    });
+    if (extra?.debrief) created.push(e.id);
+  }
+  await db.matchPlaylist.create({ data: { sessionId: session.id, name: "Debrief demo", eventIds: created } });
+  console.log("Analisi video dimostrativa creata (dati fittizi).");
 }
 
 main()

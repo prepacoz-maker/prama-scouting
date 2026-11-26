@@ -13,6 +13,11 @@ const nextConfig = {
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
         ],
       },
+      // Il player YouTube richiede un referrer: solo l'origine, solo nell'area match analysis.
+      {
+        source: "/match-analysis/:path*",
+        headers: [{ key: "Referrer-Policy", value: "strict-origin" }],
+      },
     ];
   },
 };
