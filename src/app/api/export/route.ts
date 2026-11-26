@@ -3,7 +3,11 @@ import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { getUser } from "@/lib/auth";
 import { can } from "@/lib/permissions";
-import { ATTRIBUTES, ATTRIBUTE_LABELS } from "@/lib/rating";
+import { ATTRIBUTES, ATTRIBUTE_LABELS, GK_ATTRIBUTES } from "@/lib/rating";
+import { MISMATCH_LABELS, MISMATCH_TYPE_LABELS } from "@/lib/standard";
+
+const exportLabel = (a: (typeof ATTRIBUTES)[number]) =>
+  (GK_ATTRIBUTES as readonly string[]).includes(a) ? `Portiere · ${ATTRIBUTE_LABELS[a]}` : ATTRIBUTE_LABELS[a];
 import { INTEREST_LABELS, RELIABILITY_LABELS, REVIEW_LABELS, STATUS_LABELS, EVENT_LABELS } from "@/lib/labels";
 
 export const runtime = "nodejs";
@@ -35,10 +39,12 @@ export async function GET(request: Request) {
       orderBy: { date: "desc" },
     });
     rows = [
-      ["Codice atleta", "Zona", "Data", "Evento", "Categoria", "Minuti", "Stato scheda", "Overall scheda", ...ATTRIBUTES.map((a) => ATTRIBUTE_LABELS[a])],
+      ["Codice atleta", "Zona", "Data", "Evento", "Categoria", "Minuti", "Stato scheda", "Overall scheda", "Standard", "Mismatch", "Tipo mismatch", ...ATTRIBUTES.map(exportLabel)],
       ...observations.map((o) => [
         o.athlete.code, o.zone.code, day(o.date), EVENT_LABELS[o.eventType], o.category, o.minutes,
-        REVIEW_LABELS[o.reviewStatus], o.overallSnapshot, ...ATTRIBUTES.map((a) => o[a]),
+        REVIEW_LABELS[o.reviewStatus], o.overallSnapshot, o.standardVersion,
+        o.mismatch ? MISMATCH_LABELS[o.mismatch] : "", o.mismatchType ? MISMATCH_TYPE_LABELS[o.mismatchType] : "",
+        ...ATTRIBUTES.map((a) => o[a]),
       ]),
     ];
   } else {

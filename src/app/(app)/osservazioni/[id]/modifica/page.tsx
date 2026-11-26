@@ -35,13 +35,15 @@ export default async function EditObservationPage({ params }: { params: { id: st
     action: obs.action,
     nextCheckSuggested: obs.nextCheckSuggested?.toISOString().slice(0, 10) ?? "",
     conflictOfInterest: obs.conflictOfInterest,
+    mismatch: obs.mismatch,
+    mismatchType: obs.mismatchType,
   } satisfies ObservationFormValues;
 
   return (
     <>
       <PageHeader title="Completa la scheda" description={`Atleta ${obs.athlete.code}`} />
       <ObservationForm
-        athletes={[{ id: obs.athleteId, label: `${obs.athlete.code} · ${obs.athlete.team}`, team: obs.athlete.team, category: obs.athlete.category }]}
+        athletes={[{ id: obs.athleteId, label: `${obs.athlete.code} · ${obs.athlete.team}`, team: obs.athlete.team, category: obs.athlete.category, roleGroup: obs.athlete.roleGroup }]}
         initial={initial}
         observationId={obs.id}
         reviewNote={obs.reviewStatus === "INTEGRAZIONE_RICHIESTA" ? obs.reviewNote : null}

@@ -54,7 +54,19 @@ describe("scheda di osservazione", () => {
     const draft = observationSchema.parse({ athleteId: "a1", date: today, eventType: "ALLENAMENTO", team: "Squadra Demo", category: "U15", minutes: 30 });
     const issues = submissionIssues(draft);
     expect(issues.length).toBe(5);
-    expect(issues[0]).toContain("almeno 8 attributi");
+    expect(issues[0]).toContain("almeno 9 attributi su 17");
+  });
+
+  it("per il portiere usa la scheda portiere: minimo 6 attributi su 12", () => {
+    const draft = observationSchema.parse({ athleteId: "a1", date: today, eventType: "PARTITA", team: "Squadra Demo", category: "U17", minutes: 90 });
+    expect(submissionIssues(draft, "PORTIERE")[0]).toContain("almeno 6 attributi su 12");
+  });
+
+  it("chiede il tipo quando il mismatch è creato, sfruttato o subìto", () => {
+    const withMismatch = observationSchema.parse({ ...valid, mismatch: "CREATO" });
+    expect(submissionIssues(withMismatch).some((i) => i.includes("tipo di mismatch"))).toBe(true);
+    const typed = observationSchema.parse({ ...valid, mismatch: "CREATO", mismatchType: "VELOCITA" });
+    expect(submissionIssues(typed)).toEqual([]);
   });
 });
 

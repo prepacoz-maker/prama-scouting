@@ -143,10 +143,10 @@ model User {
 
 /// Profilo operativo dello scout (abilitazioni specifiche).
 model Scout {
-  id             String   @id @default(cuid())
-  userId         String   @unique
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  canUploadMedia Boolean  @default(false)
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  canUploadMedia Boolean   @default(false)
   trainedAt      DateTime? // data di completamento del corso scout
   ndaSignedAt    DateTime? // impegno di riservatezza firmato
 }
@@ -218,54 +218,73 @@ model AthleteIdentity {
 }
 
 model Observation {
-  id         String    @id @default(cuid())
-  athleteId  String
-  athlete    Athlete   @relation(fields: [athleteId], references: [id], onDelete: Cascade)
-  scoutId    String
-  scout      User      @relation("ObservationScout", fields: [scoutId], references: [id])
-  zoneId     String
-  zone       Zone      @relation(fields: [zoneId], references: [id])
-  date       DateTime
-  eventType  EventType
-  team       String
-  opponent   String?
-  category   String
+  id          String     @id @default(cuid())
+  athleteId   String
+  athlete     Athlete    @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  scoutId     String
+  scout       User       @relation("ObservationScout", fields: [scoutId], references: [id])
+  zoneId      String
+  zone        Zone       @relation(fields: [zoneId], references: [id])
+  date        DateTime
+  eventType   EventType
+  team        String
+  opponent    String?
+  category    String
   competition String?
-  venue      String?
-  minutes    Int
-  conditions String?
-  maturation Maturation @default(NON_VALUTABILE)
+  venue       String?
+  minutes     Int
+  conditions  String?
+  maturation  Maturation @default(NON_VALUTABILE)
 
   // Attributi 1-5; null = non valutabile
-  tecnica            Int?
-  passaggio          Int?
-  controllo          Int?
-  finalizzazione     Int?
-  dribbling          Int?
-  velocita           Int?
-  resistenza         Int?
-  coordinazione      Int?
-  intelligenzaTattica Int?
-  posizionamento     Int?
-  decisionMaking     Int?
-  lavoroDiSquadra    Int?
-  mentalita          Int?
-  disciplina         Int?
-  reazioneErrori     Int?
+  tecnica                Int?
+  passaggio              Int?
+  controllo              Int?
+  finalizzazione         Int?
+  dribbling              Int?
+  velocita               Int?
+  resistenza             Int?
+  coordinazione          Int?
+  intelligenzaTattica    Int?
+  posizionamento         Int?
+  decisionMaking         Int?
+  lavoroDiSquadra        Int?
+  mentalita              Int?
+  disciplina             Int?
+  reazioneErrori         Int?
+  // Standard v2.1: nuovi attributi di movimento
+  pressioneRiaggressione Int?
+  unoControUnoDifensivo  Int?
+  // Set portiere v1 (approvato il 25/11/2026)
+  gkPiazzamento          Int?
+  gkPresaRespinta        Int?
+  gkReattivita           Int?
+  gkUsciteAlte           Int?
+  gkUnoControUno         Int?
+  gkProfondita           Int?
+  gkGiocoPiedi           Int?
+  gkDistribuzione        Int?
+  gkLettura              Int?
+  gkComunicazione        Int?
+  gkCompetere            Int?
+  gkReazioneErrore       Int?
+  mismatch               MismatchOutcome?
+  mismatchType           MismatchType?
+  standardVersion        String           @default("v2.1")
 
-  strengths       String  @default("")
-  improvements    String  @default("")
-  notes           String  @default("")
-  interest        Interest?
-  action          RecommendedAction?
+  strengths          String             @default("")
+  improvements       String             @default("")
+  notes              String             @default("")
+  interest           Interest?
+  action             RecommendedAction?
   nextCheckSuggested DateTime?
-  conflictOfInterest Boolean @default(false)
+  conflictOfInterest Boolean            @default(false)
 
-  reviewStatus ReviewStatus @default(BOZZA)
-  reviewedById String?
-  reviewedBy   User?        @relation("ObservationReviewer", fields: [reviewedById], references: [id])
-  reviewedAt   DateTime?
-  reviewNote   String?
+  reviewStatus    ReviewStatus @default(BOZZA)
+  reviewedById    String?
+  reviewedBy      User?        @relation("ObservationReviewer", fields: [reviewedById], references: [id])
+  reviewedAt      DateTime?
+  reviewNote      String?
   overallSnapshot Int? // overall della singola osservazione, fissato all'approvazione
 
   createdAt DateTime @default(now())
@@ -290,7 +309,7 @@ model Media {
   mimeType      String
   sizeBytes     Int
   tags          String[]
-  markers       Json?        // [{ t: secondi, label: "azione" }]
+  markers       Json? // [{ t: secondi, label: "azione" }]
   viewed        Boolean      @default(false)
   createdAt     DateTime     @default(now())
 }
@@ -300,11 +319,11 @@ model Consent {
   athleteId    String
   athlete      Athlete     @relation(fields: [athleteId], references: [id], onDelete: Cascade)
   type         ConsentType
-  grantedBy    String      // es. "genitore/tutore" (nessun nome in chiaro qui)
+  grantedBy    String // es. "genitore/tutore" (nessun nome in chiaro qui)
   grantedAt    DateTime
   expiresAt    DateTime?
   revokedAt    DateTime?
-  documentRef  String?     // riferimento al documento firmato, conservato fuori dall'app
+  documentRef  String? // riferimento al documento firmato, conservato fuori dall'app
   recordedById String
   recordedBy   User        @relation(fields: [recordedById], references: [id])
   createdAt    DateTime    @default(now())
@@ -376,4 +395,18 @@ model AuditLog {
 
   @@index([createdAt])
   @@index([entity, entityId])
+}
+
+enum MismatchOutcome {
+  CREATO
+  SFRUTTATO
+  SUBITO
+  NON_OSSERVATO
+}
+
+enum MismatchType {
+  VELOCITA
+  STRUTTURA_FISICA
+  ABILITA_RUOLO
+  POSIZIONE
 }

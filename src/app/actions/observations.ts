@@ -7,7 +7,7 @@ import { audit } from "@/lib/audit";
 import { requireUser } from "@/lib/auth";
 import { can, canEditObservation, canReviewObservation, canViewAthlete } from "@/lib/permissions";
 import { observationSchema, submissionIssues } from "@/lib/validation";
-import { ATTRIBUTES } from "@/lib/rating";
+import { ATTRIBUTES, STANDARD_VERSION, attributesFor } from "@/lib/rating";
 import { recomputeAthlete } from "@/lib/recompute";
 import { describeError, fail, type ActionResult } from "./result";
 
@@ -26,11 +26,13 @@ export async function saveObservation(
     if (athlete.anonymizedAt) return fail("Il profilo è stato anonimizzato: non accetta nuove schede.");
 
     if (mode === "submit") {
-      const issues = submissionIssues(input);
+      const issues = submissionIssues(input, athlete.roleGroup);
       if (issues.length) return fail(issues.join(" "));
     }
 
-    const ratings = Object.fromEntries(ATTRIBUTES.map((a) => [a, input[a] ?? null]));
+    // Si salvano solo gli attributi della scheda del reparto (movimento o portiere).
+    const template = attributesFor(athlete.roleGroup) as readonly string[];
+    const ratings = Object.fromEntries(ATTRIBUTES.map((a) => [a, template.includes(a) ? (input[a] ?? null) : null]));
     const data = {
       athleteId: athlete.id,
       zoneId: athlete.zoneId,
@@ -52,6 +54,9 @@ export async function saveObservation(
       action: input.action ?? null,
       nextCheckSuggested: input.nextCheckSuggested ? new Date(input.nextCheckSuggested) : null,
       conflictOfInterest: input.conflictOfInterest,
+      mismatch: input.mismatch ?? null,
+      mismatchType: input.mismatch && input.mismatch !== "NON_OSSERVATO" ? (input.mismatchType ?? null) : null,
+      standardVersion: STANDARD_VERSION,
       reviewStatus: mode === "submit" ? ("DA_VALUTARE" as const) : undefined,
     };
 

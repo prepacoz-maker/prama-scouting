@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ATTRIBUTE_LABELS, AREAS } from "@/lib/rating";
+import { ATTRIBUTE_LABELS } from "@/lib/rating";
 import type { AthleteCardData } from "@/lib/athlete-view";
 import { EVENT_LABELS, FOOT_LABELS, RELIABILITY_LABELS, fmtDate } from "@/lib/labels";
 import { AttributeBar, BadgeChip, StatusTag } from "./ui";
@@ -124,7 +124,13 @@ export function AthleteCard({ data, showActions = true }: { data: AthleteCardDat
           </div>
 
           <div className="space-y-4">
-            {AREAS.map((area) => (
+            {data.goalkeeper ? (
+              <p className="muted text-xs">
+                Scheda portiere (set portiere v1): l&apos;Overall del portiere si calcola su attributi propri e non è confrontabile con quello
+                dei giocatori di movimento.
+              </p>
+            ) : null}
+            {data.areas.map((area) => (
               <div key={area.key}>
                 <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-prama-500 dark:text-prama-300">{area.label}</h3>
                 <div className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">

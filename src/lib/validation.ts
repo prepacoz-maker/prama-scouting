@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ATTRIBUTES } from "./rating";
+import { ATTRIBUTES, attributesFor, minRatedFor, type RoleGroup } from "./rating";
 
 const rating = z
   .union([z.number().int().min(1, "Il voto va da 1 a 5").max(5, "Il voto va da 1 a 5"), z.null()])
@@ -64,6 +64,8 @@ export const observationSchema = z
     action: z.enum(["ARCHIVIAZIONE", "NUOVO_CONTROLLO", "RICHIESTA_VIDEO", "COLLOQUIO", "FOLLOW_UP"]).optional().nullable(),
     nextCheckSuggested: dateString.optional().or(z.literal("")).nullable(),
     conflictOfInterest: z.boolean().default(false),
+    mismatch: z.enum(["CREATO", "SFRUTTATO", "SUBITO", "NON_OSSERVATO"]).optional().nullable(),
+    mismatchType: z.enum(["VELOCITA", "STRUTTURA_FISICA", "ABILITA_RUOLO", "POSIZIONE"]).optional().nullable(),
   })
   .refine((v) => new Date(v.date).getTime() <= Date.now() + 86_400_000, {
     path: ["date"],
@@ -72,18 +74,25 @@ export const observationSchema = z
 export type ObservationInput = z.infer<typeof observationSchema>;
 
 /** Requisiti aggiuntivi per l'invio al referente (non richiesti per la bozza). */
-export function submissionIssues(input: ObservationInput): string[] {
+export function submissionIssues(input: ObservationInput, roleGroup: RoleGroup = "CENTROCAMPISTA"): string[] {
   const issues: string[] = [];
-  const rated = ATTRIBUTES.filter((a) => typeof input[a] === "number").length;
-  if (rated < 8) issues.push(`Valutare almeno 8 attributi su 15 (ora: ${rated}). Usare N/V solo per ciò che non si è visto.`);
+  const template = attributesFor(roleGroup);
+  const min = minRatedFor(roleGroup);
+  const rated = template.filter((a) => typeof input[a] === "number").length;
+  if (rated < min)
+    issues.push(
+      `Valutare almeno ${min} attributi su ${template.length} (ora: ${rated}). Usare N/V solo per ciò che non si è visto.`,
+    );
   if (!input.strengths?.trim()) issues.push("Indicare almeno un punto di forza.");
   // Standard PRAMA: i voti estremi (1, 4, 5) vanno motivati con almeno un episodio (minuto e fatto).
-  const extremes = ATTRIBUTES.filter((a) => input[a] === 1 || input[a] === 4 || input[a] === 5).length;
+  const extremes = template.filter((a) => input[a] === 1 || input[a] === 4 || input[a] === 5).length;
   if (extremes > 0 && (input.notes?.trim().length ?? 0) < 15)
     issues.push("I voti 1, 4 e 5 vanno motivati: annotare negli episodi almeno un fatto con il minuto.");
   if (!input.improvements?.trim()) issues.push("Indicare almeno un'area di miglioramento.");
   if (!input.interest) issues.push("Indicare il livello di interesse proposto.");
   if (!input.action) issues.push("Indicare l'azione consigliata.");
+  if (input.mismatch && input.mismatch !== "NON_OSSERVATO" && !input.mismatchType)
+    issues.push("Indicare il tipo di mismatch (velocità, struttura fisica, abilità nel ruolo, posizione).");
   return issues;
 }
 

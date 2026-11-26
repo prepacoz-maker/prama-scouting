@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canEditObservation, canReviewObservation, canViewAthlete } from "@/lib/permissions";
-import { AREAS, ATTRIBUTE_LABELS } from "@/lib/rating";
+import { ATTRIBUTE_LABELS, areasFor, isGoalkeeper } from "@/lib/rating";
+import { MISMATCH_LABELS, MISMATCH_TYPE_LABELS } from "@/lib/standard";
 import { ACTION_LABELS, EVENT_LABELS, INTEREST_LABELS, MATURATION_LABELS, REVIEW_LABELS, fmtDate, fmtDateTime } from "@/lib/labels";
 import { DeleteDraftButton, ReviewPanel } from "@/components/panels";
 import { Alert, AttributeBar, PageHeader, Panel, Pill } from "@/components/ui";
@@ -37,7 +38,13 @@ export default async function ObservationPage({ params, searchParams }: { params
     ["Maturazione apparente", MATURATION_LABELS[obs.maturation]],
     ["Scout", obs.scout.name],
     ["Zona", `${obs.athlete.zone.code} ${obs.athlete.zone.name}`],
+    ["Scheda", isGoalkeeper(obs.athlete.roleGroup) ? `Portiere (standard ${obs.standardVersion})` : `Movimento (standard ${obs.standardVersion})`],
   ];
+  if (!isGoalkeeper(obs.athlete.roleGroup))
+    facts.push([
+      "Mismatch",
+      obs.mismatch ? `${MISMATCH_LABELS[obs.mismatch]}${obs.mismatchType ? ` · ${MISMATCH_TYPE_LABELS[obs.mismatchType]}` : ""}` : "—",
+    ]);
 
   return (
     <>
@@ -86,7 +93,7 @@ export default async function ObservationPage({ params, searchParams }: { params
 
           <Panel title="Valutazioni">
             <div className="space-y-4">
-              {AREAS.map((area) => (
+              {areasFor(obs.athlete.roleGroup).map((area) => (
                 <div key={area.key}>
                   <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-prama-500 dark:text-prama-300">{area.label}</h3>
                   <div className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">

@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   ATTRIBUTES,
   DEFAULT_WEIGHTS,
+  GK_ATTRIBUTES,
+  MIN_RATED_GK,
+  OUTFIELD_ATTRIBUTES,
+  areaScores,
+  areasFor,
   averageRatings,
   computeBadges,
   computeOverall,
@@ -125,5 +130,37 @@ describe("badge e aree di sviluppo", () => {
   it("indica al massimo tre aree di sviluppo, dalla più bassa", () => {
     const averages = averageRatings([{ ...all(4), resistenza: 2, finalizzazione: 3, dribbling: 1, velocita: 3 }]);
     expect(developmentAreas(averages)).toEqual(["dribbling", "resistenza", "finalizzazione"]);
+  });
+});
+
+describe("standard v2.1 e set portiere", () => {
+  const only = (attrs: readonly string[], value: number): Ratings =>
+    Object.fromEntries(ATTRIBUTES.map((a) => [a, attrs.includes(a) ? value : null]));
+
+  it("ha 17 attributi di movimento e 12 del portiere", () => {
+    expect(OUTFIELD_ATTRIBUTES.length).toBe(17);
+    expect(GK_ATTRIBUTES.length).toBe(12);
+  });
+
+  it("calcola l'Overall del portiere solo con gli attributi della scheda portiere", () => {
+    const gk = only(GK_ATTRIBUTES, 4);
+    expect(computeOverall(gk, DEFAULT_WEIGHTS.PORTIERE, MIN_RATED_GK)).not.toBeNull();
+    // I voti di movimento non incidono sul portiere (peso 0).
+    const mixed = { ...gk, ...only(OUTFIELD_ATTRIBUTES, 1) } as Ratings;
+    for (const a of GK_ATTRIBUTES) mixed[a] = 4;
+    expect(computeOverall(mixed, DEFAULT_WEIGHTS.PORTIERE, MIN_RATED_GK)).toBe(computeOverall(gk, DEFAULT_WEIGHTS.PORTIERE, MIN_RATED_GK));
+    // Un giocatore di movimento con soli voti da portiere non ha Overall.
+    expect(computeOverall(gk, DEFAULT_WEIGHTS.DIFENSORE)).toBeNull();
+  });
+
+  it("usa 5 aree per il movimento e 4 per il portiere", () => {
+    expect(areasFor("ATTACCANTE").length).toBe(5);
+    expect(areasFor("PORTIERE").length).toBe(4);
+    expect(areaScores(only(GK_ATTRIBUTES, 3), areasFor("PORTIERE")).every((a) => a.value === 3)).toBe(true);
+  });
+
+  it("assegna il badge Intensità senza palla con pressione e 1 contro 1 difensivo alti", () => {
+    const averages = { ...all(3), pressioneRiaggressione: 5, unoControUnoDifensivo: 4 } as Ratings;
+    expect(computeBadges({ averages, approvedCount: 3, firstOverall: null, lastOverall: null })).toContain("INTENSITA");
   });
 });

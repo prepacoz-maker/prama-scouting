@@ -2,8 +2,10 @@
 import { db } from "./db";
 import { canSeeIdentity, canViewAthlete, type SessionUser } from "./permissions";
 import {
-  ATTRIBUTES,
   BADGES,
+  areasFor,
+  attributesFor,
+  isGoalkeeper,
   OBSERVATIONS_WINDOW,
   areaScores,
   averageRatings,
@@ -36,8 +38,9 @@ export async function loadAthleteCard(user: SessionUser, athleteId: string, opti
   const firstRatings = first && approved.length > 1 ? pickRatings(first) : null;
   const lastRatings = last ? pickRatings(last) : null;
 
-  const firstAreas = firstRatings ? areaScores(firstRatings) : null;
-  const areas = areaScores(averages).map((a, i) => ({ ...a, first: firstAreas ? firstAreas[i].value : null }));
+  const templateAreas = areasFor(athlete.roleGroup);
+  const firstAreas = firstRatings ? areaScores(firstRatings, templateAreas) : null;
+  const areas = areaScores(averages, templateAreas).map((a, i) => ({ ...a, first: firstAreas ? firstAreas[i].value : null }));
 
   // La foto compare solo se esiste un consenso valido per le foto.
   const now = new Date();
@@ -58,7 +61,7 @@ export async function loadAthleteCard(user: SessionUser, athleteId: string, opti
     areas,
     comparison:
       firstRatings && lastRatings
-        ? ATTRIBUTES.map((a: Attribute) => ({ attribute: a, first: firstRatings[a] ?? null, last: lastRatings[a] ?? null }))
+        ? attributesFor(athlete.roleGroup).map((a: Attribute) => ({ attribute: a, first: firstRatings[a] ?? null, last: lastRatings[a] ?? null }))
         : null,
     firstOverall: first?.overallSnapshot ?? null,
     lastOverall: last?.overallSnapshot ?? null,
@@ -66,6 +69,7 @@ export async function loadAthleteCard(user: SessionUser, athleteId: string, opti
       .map((b) => ({ key: b.badge.key as BadgeKey, label: b.badge.label, description: b.badge.description }))
       .filter((b) => b.key in BADGES),
     development: developmentAreas(averages),
+    goalkeeper: isGoalkeeper(athlete.roleGroup),
     needsCheck: needsNewCheck(athlete.reliability, athlete.lastObservedAt, athlete.nextCheckAt),
     timeline: approved.map((o) => ({
       id: o.id,

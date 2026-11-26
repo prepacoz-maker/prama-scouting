@@ -20,6 +20,7 @@ export default async function NewObservationPage({ searchParams }: { searchParam
     label: `${a.code}${a.identity && canSeeIdentity(user, a) ? ` · ${a.identity.lastName} ${a.identity.firstName}` : ""} · ${a.team}`,
     team: a.team,
     category: a.category,
+    roleGroup: a.roleGroup,
   }));
   const selected = options.find((o) => o.id === searchParams.atleta);
 

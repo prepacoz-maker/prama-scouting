@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 import { createUser, createZone, saveRetention, saveWeights, setScoutUpload, setUserActive, toggleZone } from "@/app/actions/admin";
 import type { ActionResult } from "@/app/actions/result";
 import { ROLE_GROUP_LABELS, ROLE_LABELS } from "@/lib/labels";
-import { ATTRIBUTES, ATTRIBUTE_LABELS, type Attribute } from "@/lib/rating";
+import { ATTRIBUTE_LABELS, attributesFor, type Attribute, type RoleGroup } from "@/lib/rating";
 import { Alert } from "./ui";
 
 function useAction() {
@@ -151,7 +151,8 @@ export function WeightsEditor({ weights }: { weights: Record<string, Record<Attr
   const [group, setGroup] = useState(groups[0]);
   const [values, setValues] = useState(weights);
   const current = values[group];
-  const total = ATTRIBUTES.reduce((s, a) => s + (Number(current[a]) || 0), 0);
+  const template = attributesFor(group as RoleGroup);
+  const total = template.reduce((s, a) => s + (Number(current[a]) || 0), 0);
   return (
     <div className="space-y-3">
       {feedback}
@@ -163,7 +164,7 @@ export function WeightsEditor({ weights }: { weights: Record<string, Record<Attr
         ))}
       </div>
       <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
-        {ATTRIBUTES.map((a) => (
+        {template.map((a) => (
           <div key={a} className="flex items-center justify-between gap-3">
             <label htmlFor={`w-${a}`} className="text-sm">
               {ATTRIBUTE_LABELS[a]}
@@ -183,6 +184,7 @@ export function WeightsEditor({ weights }: { weights: Record<string, Record<Attr
         ))}
       </div>
       <p className="hint">
+        {group === "PORTIERE" ? "Pesi della scheda portiere (set portiere v1). " : "Pesi dello standard v2.1. "}
         Peso da 0 a 3: più è alto, più l&apos;attributo conta nell&apos;overall del reparto. La percentuale indica il contributo effettivo. Al
         salvataggio tutte le Player Card vengono ricalcolate.
       </p>

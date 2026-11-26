@@ -8,6 +8,7 @@ import {
   computeOverall,
   computePotential,
   computeReliability,
+  minRatedFor,
   type Attribute,
   type Ratings,
   type RoleGroup,
@@ -49,7 +50,7 @@ export async function recomputeAthlete(athleteId: string) {
   // Overall di ogni singola osservazione: serve per storico, progressione e confronto.
   const snapshots: (number | null)[] = [];
   for (const o of approved) {
-    const snapshot = computeOverall(pickRatings(o), weights);
+    const snapshot = computeOverall(pickRatings(o), weights, minRatedFor(athlete.roleGroup));
     snapshots.push(snapshot);
     if (snapshot !== o.overallSnapshot) {
       await db.observation.update({ where: { id: o.id }, data: { overallSnapshot: snapshot } });
@@ -58,7 +59,7 @@ export async function recomputeAthlete(athleteId: string) {
 
   const recent = approved.slice(-OBSERVATIONS_WINDOW);
   const averages = averageRatings(recent.map(pickRatings));
-  const overall = computeOverall(averages, weights);
+  const overall = computeOverall(averages, weights, minRatedFor(athlete.roleGroup));
   const last = approved.at(-1) ?? null;
   const reliability = computeReliability(approved.length, last?.date ?? null);
   const valid = snapshots.filter((s): s is number => s !== null);
