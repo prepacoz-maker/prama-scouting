@@ -46,6 +46,9 @@ export default async function AthletePage({ params }: { params: { id: string } }
     manage ? db.user.findMany({ where: { active: true, role: "SCOUT", zoneId: athlete.zoneId }, select: { id: true, name: true }, orderBy: { name: "asc" } }) : Promise.resolve([]),
     user.role === "SCOUT" ? db.scout.findUnique({ where: { userId: user.id } }) : Promise.resolve(null),
   ]);
+  const matchSessions = can(user, "match.manage")
+    ? await db.matchSession.findMany({ where: { athleteId: athlete.id }, include: { _count: { select: { events: true } } }, orderBy: { date: "desc" } })
+    : null;
 
   const progress = data.timeline.filter((t) => t.overall !== null).map((t) => ({ date: fmtDate(t.date).slice(0, 5), overall: t.overall as number }));
   const now = new Date();
@@ -186,6 +189,42 @@ export default async function AthletePage({ params }: { params: { id: string } }
             />
           </Panel>
         </div>
+
+        {matchSessions ? (
+          <div className="lg:col-span-2">
+            <Panel
+              title="Match analysis"
+              action={
+                !athlete.anonymizedAt ? (
+                  <Link href={`/match-analysis/nuova?atleta=${athlete.id}`} className="text-sm font-semibold underline">
+                    Nuova analisi
+                  </Link>
+                ) : null
+              }
+            >
+              {matchSessions.length ? (
+                <ul className="space-y-2">
+                  {matchSessions.map((m) => (
+                    <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-prama-100 px-3 py-2 text-sm dark:border-prama-700">
+                      <Link href={`/match-analysis/${m.id}`} className="font-semibold hover:underline">
+                        {fmtDate(m.date)} · {m.title}
+                      </Link>
+                      <span className="flex items-center gap-2">
+                        <span className="muted text-xs">{m._count.events} episodi · {m.status === "COMPLETATA" ? "completata" : "in corso"}</span>
+                        <Link href={`/match-analysis/${m.id}/report`} className="btn-secondary btn-sm">
+                          Report
+                        </Link>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="muted text-sm">Nessuna analisi video. Per aprirne una serve un consenso VIDEO valido.</p>
+              )}
+              <p className="muted mt-2 text-xs">Riservato al team PRAMA. La valutazione 1-5 da video si registra con una nuova scheda di osservazione, tipo evento «Video».</p>
+            </Panel>
+          </div>
+        ) : null}
 
         {user.role === "ADMIN" ? (
           <div className="lg:col-span-2">

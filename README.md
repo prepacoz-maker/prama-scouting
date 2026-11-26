@@ -88,3 +88,13 @@ docs/                    architettura, deploy, guida rapida, sicurezza e privacy
 - [Deploy](docs/DEPLOY.md)
 - [Guida rapida per scout e referenti](docs/GUIDA-RAPIDA.md)
 - [Checklist di sicurezza e privacy](docs/SICUREZZA-PRIVACY.md)
+
+## Match analysis (v1, solo admin)
+
+Area **Match analysis** (menu laterale, solo ruolo Admin): analisi video delle partite con pannello di codifica a pulsanti (calcio: giocatore di movimento e portiere), tasti rapidi, timeline, giudizio della sequenza (ECCELLENTE / BUONO / DA MIGLIORARE / CRITICO + confidenza), disegni sul fermo immagine, playlist, statistiche dai tag, report dal template PRAMA ed export CSV.
+
+- **Il video non viene caricato.** Si apre un file dal proprio computer (riprodotto nel browser) oppure un link (YouTube o file video online). Nel database si salvano solo episodi, tempi, disegni e note.
+- Per aprire un'analisi su un atleta serve un **consenso VIDEO valido**; per ogni analisi l'analista conferma diritti sul video e consensi.
+- Gli scout non hanno accesso. Ogni apertura, modifica ed export è nel registro attività.
+- Scorciatoie: Spazio o K play/pausa, J/L ±5 s, virgola/punto ±1 fotogramma, lettere e cifre per i pulsanti.
+- Logica pura e test: `src/lib/match.ts`, `tests/match.test.ts`.

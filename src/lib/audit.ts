@@ -22,7 +22,12 @@ export type AuditAction =
   | "EXPORT"
   | "SETTINGS_UPDATE"
   | "USER_CREATE"
-  | "USER_UPDATE";
+  | "USER_UPDATE"
+  | "MATCH_CREATE"
+  | "MATCH_VIEW"
+  | "MATCH_UPDATE"
+  | "MATCH_DELETE"
+  | "MATCH_EXPORT";
 
 /** Registra un evento. Mai inserire in `meta` nomi, note o altri dati personali. */
 export async function audit(

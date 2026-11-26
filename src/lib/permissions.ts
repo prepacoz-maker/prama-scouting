@@ -23,6 +23,8 @@ export const PERMISSIONS = {
   "export.run": ["ADMIN"],
   "settings.manage": ["ADMIN"],
   "audit.read": ["ADMIN"],
+  // Match analysis v1: riservata al team PRAMA (gli scout non hanno accesso).
+  "match.manage": ["ADMIN"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;
